@@ -3,8 +3,10 @@
 ## Use case: An agent that answers questions about Eurovision.
 import kagglehub
 import polars as pl
+from databricks.sdk import WorkspaceClient
 from kagglehub import KaggleDatasetAdapter
 from loguru import logger
+from openai import OpenAI
 from pyspark.sql import SparkSession
 
 from eurovision_voting_bloc_party.config import get_env, load_config
@@ -94,3 +96,66 @@ eurovision_df.head(5)
 
 # COMMAND ----------
 # Section 2: Wikipedia ingestion
+
+# COMMAND ----------
+# Section 3: Experiment with LLMs
+w = WorkspaceClient()
+
+host = w.config.host
+token = w.tokens.create(lifetime_seconds=1200).token_value
+
+client = OpenAI(
+    api_key=token,
+    base_url=f"{host.rstrip('/')}/serving-endpoints"
+)
+model_name = "databricks-llama-4-maverick"
+
+query = f"""
+  SELECT
+      country,
+      COUNT(*) as participations,
+      SUM(CASE WHEN final_place = 1 THEN 1 ELSE 0 END) as wins,
+      AVG(final_place) as avg_place
+  FROM {CATALOG}.{SCHEMA}.{TABLE_NAME}
+  WHERE final_place IS NOT NULL
+  GROUP BY country
+  HAVING COUNT(*) >= 5
+  ORDER BY participations DESC, wins ASC
+  """
+
+
+summary_df = spark.sql(query)
+summary_text = summary_df.toPandas().to_markdown(index=False)
+
+response = client.chat.completions.create(
+    model=model_name,
+    messages=[
+        {
+            "role": "system",
+            "content": (
+                "You are a helpful AI assistant with access to Eurovision Song Contest data."
+                "Use the provided data to answer questions accurately. Be concise and direct."
+                "Answer only what is asked without explaining your reasoning. "
+                "If the data is insufficient to answer, say you don't know."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Eurovision participation data:\n\n{summary_text}\n\n"
+                "Which countries participated the most times but with the least success (fewest wins)?"
+                "Tell a story about the number of times they participated, the amount of wins over the years,"
+                "and even if they didn't win, how they placed."
+            ),
+        }, ],
+    max_tokens=500,
+    temperature=0.7
+)
+
+logger.info("Response:")
+logger.info(response.choices[0].message.content)
+logger.info(f"Tokens used: {response.usage.total_tokens}")
+logger.info(f"Input tokens: {response.usage.prompt_tokens}")
+logger.info(f"Output tokens: {response.usage.completion_tokens}")
+
+# COMMAND ----------
