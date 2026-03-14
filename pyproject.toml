@@ -23,7 +23,9 @@ dependencies = [
     "databricks-agents==1.8.2",
     "psycopg==3.3.2",
     "psycopg-pool==3.3.0",
-    "psycopg[binary]==3.3.2"
+    "psycopg[binary]==3.3.2",
+    "polars>=1.39.0",
+    "kagglehub>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -40,7 +42,7 @@ ci = ["pre-commit>=4.1.0, <5",
 include-package-data = true
 
 [tool.setuptools.package-data]
-"your_custom_package" = ["../../../project_config.yml"]
+"eurovision_voting_bloc_party" = ["../../../project_config.yaml"]
 
 [build-system]
 requires = ["setuptools>=72.0"]
@@ -48,7 +50,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["your_custom_package*"]
+include = ["eurovision_voting_bloc_party*"]
 
 [tool.setuptools.dynamic]
 version = { file = "version.txt" }
