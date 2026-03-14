@@ -1,28 +1,54 @@
 <h1 align="center">
-LLMOps Course on Databricks
+Eurovision Voting Bloc Party
 </h1>
 
-## Practical information
-- Weekly lectures on Wednesdays 16:00-18:00 CET.
-- Weekly Q&A on Mondays 16:00-17:00 CET.
-- Code for the lecture is shared before the lecture.
-- Presentation and lecture materials are shared right after the lecture.
-- Video of the lecture is uploaded within 24 hours after the lecture.
+# Eurovision Voting Bloc Party
 
-- Every week we set up a deliverable, and you implement it with your own dataset.
-- To submit the deliverable, create a feature branch in that repository, and a PR to main branch. The code can be merged after we review & approve & CI pipeline runs successfully.
-- The deliverables can be submitted with a delay (for example, lecture 1 & 2 together), but we expect you to finish all assignments for the course before the demo day.
+LLM-powered Q&A system for Eurovision Song Contest data using Databricks.
 
+## Overview
 
-## Set up your environment
-In this course, we use serverless environment 4, which uses Python 3.12.
-In our examples, we use UV. Check out the documentation on how to install it: https://docs.astral.sh/uv/getting-started/installation/
+Ingests Eurovision contest data from Kaggle and Wikipedia, stores it in Delta tables, and uses Databricks LLMs to answer questions about Eurovision history.
 
-To create a new environment and create a lockfile, run:
+## Setup
 
-```
+**Requirements:**
+
+- Python 3.12
+- `uv` package manager
+- Databricks workspace access
+
+**Install dependencies:**
+
+```bash
 uv sync --extra dev
+
+Configure Databricks:
+Update databricks.yml with your workspace URL and run:
+databricks bundle deploy
+
+Project Structure
+
+├── notebooks/          # Databricks notebooks
+│   └── 01_preprocess.py
+├── resources/          # Job definitions
+├── src/                # Python package
+│   └── eurovision_voting_bloc_party/
+├── databricks.yml      # Bundle configuration
+├── project_config.yaml # Environment config
+└── pyproject.toml      # Dependencies
+
+Usage
+
+Run notebook on Databricks:
+databricks bundle run data_preprocessing_job
+
+Query with LLM:
+The notebooks demonstrate how to query Delta tables and use LLMs to answer questions about Eurovision data.
+
+Development
+
+Uses uv run for all commands:
+uv run pre-commit run --all-files
+uv run pytest
 ```
-
-
-
