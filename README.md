@@ -2,8 +2,6 @@
 Eurovision Voting Bloc Party
 </h1>
 
-# Eurovision Voting Bloc Party
-
 LLM-powered Q&A system for Eurovision Song Contest data using Databricks.
 
 ## Overview
