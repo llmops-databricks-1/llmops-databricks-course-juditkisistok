@@ -37,7 +37,8 @@ dev = ["databricks-connect>=17.0,<18",
        "claudetracing>=0.2.0,<1",]
 
 ci = ["pre-commit>=4.5.1,<5",
-      "pytest>=9.0.2,<10"]
+      "pytest>=9.0.2,<10",
+      "pyspark>=3.5.0,<4"]
 
 [tool.setuptools]
 include-package-data = true
