@@ -4,7 +4,6 @@
 from datetime import datetime
 
 import arxiv
-import polars as pl
 import wikipediaapi
 from databricks.sdk import WorkspaceClient
 from loguru import logger
@@ -54,7 +53,7 @@ write_to_delta_table(df, CATALOG, SCHEMA, TABLE_NAME)
 
 # COMMAND ----------
 # Verify the data - read back the table and show some records
-def read_delta_table(catalog: str, schema: str, table_name: str) -> pl.DataFrame:
+def read_delta_table(catalog: str, schema: str, table_name: str) -> None:
     df = spark.table(f"{catalog}.{schema}.{table_name}")
 
     logger.info(f"Table: {catalog}.{schema}.{table_name}")
@@ -63,7 +62,7 @@ def read_delta_table(catalog: str, schema: str, table_name: str) -> pl.DataFrame
     df.printSchema()
 
     logger.info("Sample records:")
-    df.head(5)
+    df.show(5)
 
 
 read_delta_table(CATALOG, SCHEMA, TABLE_NAME)
@@ -71,7 +70,7 @@ read_delta_table(CATALOG, SCHEMA, TABLE_NAME)
 
 # COMMAND ----------
 # Section 2: Wikipedia ingestion
-years = [str(year) for year in range(1956, 2024)]
+years = [str(year) for year in range(1956, 2026)]
 wiki = wikipediaapi.Wikipedia(user_agent="EurovisionVotingBlocParty/1.0", language="en")
 
 
@@ -86,7 +85,9 @@ def fetch_wikipedia_page(year: str) -> str:
         }
 
 
-wikipedia_data = [fetch_wikipedia_page(year) for year in years]
+wikipedia_data = [
+    page for year in years if (page := fetch_wikipedia_page(year)) is not None
+]
 
 wikipedia_spark_df = spark.createDataFrame(wikipedia_data)
 
@@ -146,14 +147,14 @@ write_to_delta_table(arxiv_spark_df, CATALOG, SCHEMA, TABLE_NAME_ARXIV)
 read_delta_table(CATALOG, SCHEMA, TABLE_NAME_ARXIV)
 
 # COMMAND ----------
-# Section 3: Experiment with LLMs
+# Section 4: Experiment with LLMs
 w = WorkspaceClient()
 
 host = w.config.host
 token = w.tokens.create(lifetime_seconds=1200).token_value
 
 client = OpenAI(api_key=token, base_url=f"{host.rstrip('/')}/serving-endpoints")
-model_name = "databricks-llama-4-maverick"
+model_name = cfg.llm_endpoint
 
 query = f"""
   SELECT

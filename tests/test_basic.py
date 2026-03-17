@@ -5,7 +5,6 @@ import importlib
 
 def test_package_import() -> None:
     """Test that the package can be imported."""
-    # This will be replaced by cookiecutter with the actual package name
     package_name = "eurovision_voting_bloc_party"
     module = importlib.import_module(package_name)
     assert module is not None
