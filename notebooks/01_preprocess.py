@@ -1,15 +1,23 @@
 # Databricks notebook source
 # COMMAND ----------
 ## Use case: An agent that answers questions about Eurovision.
-import kagglehub
+from datetime import datetime
+
+import arxiv
 import polars as pl
+import wikipediaapi
 from databricks.sdk import WorkspaceClient
-from kagglehub import KaggleDatasetAdapter
 from loguru import logger
 from openai import OpenAI
 from pyspark.sql import SparkSession
+from pyspark.sql.types import ArrayType, LongType, StringType, StructField, StructType
 
 from eurovision_voting_bloc_party.config import get_env, load_config
+from eurovision_voting_bloc_party.utils import (
+    load_eurovision_data_from_kaggle,
+    prepare_eurovision_tabular_data,
+    write_to_delta_table,
+)
 
 # COMMAND ----------
 # Create Spark session
@@ -30,72 +38,110 @@ logger.info(f"Schema {CATALOG}.{SCHEMA} ready")
 
 # COMMAND ----------
 # Section 1: Load Kaggle CSV and write to Delta table
-def load_eurovision_data_from_kaggle(kaggle_data_types: list) -> pl.DataFrame:
-    data = kagglehub.dataset_load(
-  KaggleDatasetAdapter.POLARS,
-  "diamondsnake/eurovision-song-contest-data",
-  path = f"Kaggle Dataset/{kaggle_data_types}_data.csv",
-  polars_kwargs={"encoding": "utf8-lossy", "ignore_errors": True}
-)
-    return data.collect()
-
 kaggle_dict = {
     type: load_eurovision_data_from_kaggle(type) for type
     in ["contest", "country", "song"]
 }
 
-contest_data = kaggle_dict["contest"]
-country_data = kaggle_dict["country"]
-song_data = kaggle_dict["song"]
-
-
-hosts = (
-    contest_data.join(country_data, left_on="host", right_on="country")
-    .rename({"region": "host_region"})
-)
-
-countries = (
-    song_data.join(country_data, on="country")
-    .rename({"region": "participant_region"})
-)
-
-eurovision_dataset = (
-    hosts.join(countries, on="year")
-)
+eurovision_dataset = prepare_eurovision_tabular_data(kaggle_dict)
 
 # Create DataFrame
 
 df = spark.createDataFrame(eurovision_dataset.to_arrow())
 
 # Write to Delta table
-table_path = f"{CATALOG}.{SCHEMA}.{TABLE_NAME}"
 
-df.write \
-    .format("delta") \
-    .mode("overwrite") \
-    .option("mergeSchema", "true") \
-    .saveAsTable(table_path)
-
-logger.info(f"Created Delta table: {table_path}")
-logger.info(f"Records: {df.count()}")
+write_to_delta_table(df, CATALOG, SCHEMA, TABLE_NAME)
 
 # COMMAND ----------
-# Verify the data
+# Verify the data - read back the table and show some records
+def read_delta_table(catalog: str, schema: str, table_name: str) -> pl.DataFrame:
+    df = spark.table(f"{catalog}.{schema}.{table_name}")
 
-# Read back the table
-eurovision_df = spark.table(f"{CATALOG}.{SCHEMA}.{TABLE_NAME}")
+    logger.info(f"Table: {catalog}.{schema}.{table_name}")
+    logger.info(f"Total records: {df.count()}")
+    logger.info("Schema:")
+    df.printSchema()
 
-logger.info(f"Table: {CATALOG}.{SCHEMA}.{TABLE_NAME}")
-logger.info(f"Total records: {eurovision_df.count()}")
-logger.info("Schema:")
-eurovision_df.printSchema()
+    logger.info("Sample records:")
+    df.head(5)
 
-logger.info("Sample records:")
-eurovision_df.head(5)
+read_delta_table(CATALOG, SCHEMA, TABLE_NAME)
 
 
 # COMMAND ----------
 # Section 2: Wikipedia ingestion
+years = [str(year) for year in range(1956, 2024)]
+wiki = wikipediaapi.Wikipedia(user_agent='EurovisionVotingBlocParty/1.0', language="en")
+
+def fetch_wikipedia_page(year: str) -> str:
+    page = wiki.page(f'Eurovision_Song_Contest_{year}')
+    if page.exists():
+        return {
+            "year": year,
+            "title": page.title,
+            "text": page.text,
+            "summary": page.summary
+        }
+
+wikipedia_data = [fetch_wikipedia_page(year) for year in years]
+
+wikipedia_spark_df = spark.createDataFrame(wikipedia_data)
+TABLE_NAME_WIKI = "eurovision_wikipedia"
+
+write_to_delta_table(wikipedia_spark_df, CATALOG, SCHEMA, TABLE_NAME_WIKI)
+read_delta_table(CATALOG, SCHEMA, TABLE_NAME_WIKI)
+# COMMAND ----------
+# Section 3: ArXiv ingestion
+def fetch_arxiv_data(query: str = "eurovision", max_results: int = 50) -> list:
+    client = arxiv.Client()
+    search = arxiv.Search(
+        query=query,
+        max_results=max_results,
+        sort_by=arxiv.SortCriterion.Relevance
+    )
+    results = []
+    for result in search.results():
+        paper = {
+             "arxiv_id": result.entry_id.split("/")[-1],
+              "title": result.title,
+              "authors": [author.name for author in result.authors],
+              "summary": result.summary,
+              "published": int(result.published.strftime("%Y%m%d%H%M")),
+              "updated": result.updated.isoformat() if result.updated else None,
+              "categories": ", ".join(result.categories),
+              "pdf_url": result.pdf_url,
+              "primary_category": result.primary_category,
+              "ingestion_timestamp": datetime.now().isoformat(),
+        }
+        results.append(paper)
+    logger.info(f"Fetched {len(results)} papers from arXiv for query '{query}'")
+    return results
+
+papers_list = fetch_arxiv_data(max_results=50)
+logger.info("Sample paper:")
+logger.info(f"Title: {papers_list[0]['title']}")
+logger.info(f"Authors: {papers_list[0]['authors']}")
+logger.info(f"arXiv ID: {papers_list[0]['arxiv_id']}")
+
+arxiv_schema = StructType([
+      StructField("arxiv_id", StringType(), True),
+      StructField("title", StringType(), True),
+      StructField("authors", ArrayType(StringType()), True),  # Array of strings
+      StructField("summary", StringType(), True),
+      StructField("published", LongType(), True),
+      StructField("updated", StringType(), True),
+      StructField("categories", StringType(), True),
+      StructField("pdf_url", StringType(), True),
+      StructField("primary_category", StringType(), True),
+      StructField("ingestion_timestamp", StringType(), True),
+  ])
+
+arxiv_spark_df = spark.createDataFrame(papers_list, schema=arxiv_schema)
+
+TABLE_NAME_ARXIV = "eurovision_arxiv"
+write_to_delta_table(arxiv_spark_df, CATALOG, SCHEMA, TABLE_NAME_ARXIV)
+read_delta_table(CATALOG, SCHEMA, TABLE_NAME_ARXIV)
 
 # COMMAND ----------
 # Section 3: Experiment with LLMs
@@ -145,7 +191,7 @@ response = client.chat.completions.create(
                 f"Eurovision participation data:\n\n{summary_text}\n\n"
                 "Which countries participated the most times but with the least success (fewest wins)?"
                 "Tell a story about the number of times they participated, the amount of wins over the years,"
-                "and even if they didn't win, how they placed."
+                "and even if they didn't win, how they placed. Make it witty."
             ),
         }, ],
     max_tokens=500,

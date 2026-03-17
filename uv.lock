@@ -1478,6 +1478,7 @@ dependencies = [
     { name = "pyarrow" },
     { name = "pydantic" },
     { name = "python-dotenv" },
+    { name = "wikipedia-api" },
 ]
 
 [package.optional-dependencies]
@@ -1524,6 +1525,7 @@ requires-dist = [
     { name = "pydantic", specifier = "==2.11.7" },
     { name = "pytest", marker = "extra == 'ci'", specifier = ">=8.3.4,<9" },
     { name = "python-dotenv", specifier = "==1.1.1" },
+    { name = "wikipedia-api", specifier = ">=0.10.2" },
 ]
 provides-extras = ["dev", "ci"]
 
@@ -3042,6 +3044,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/c3/16/b17aff5bf1e3c2f6b34f534aaa60e67941bdbde38f86fe5b614596417383/whenever-0.7.3-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:b941d5fd5cc40505726235d2397b13dcb7da3ea4bc048646e53bd54888dec922", size = 590490, upload-time = "2025-03-19T14:40:45.986Z" },
     { url = "https://files.pythonhosted.org/packages/1c/2e/c4576a327685624ca73e7fdefbfd0e938287d46a0670f03d3a6335d26aa9/whenever-0.7.3-cp312-cp312-win32.whl", hash = "sha256:47652cf34d7419edfc73dc6852be69170283ae30bbc04908f90fcec024d0ceca", size = 295044, upload-time = "2025-03-19T14:41:07.771Z" },
     { url = "https://files.pythonhosted.org/packages/08/c1/d04656c96b99d8c7996d40e85dcfa94ee6f882ce9b5fdba5a277f3ef0011/whenever-0.7.3-cp312-cp312-win_amd64.whl", hash = "sha256:e2eb1077b97b4114d46cc91e4335a28519cc9f66ccc9a54374fd3836b69fe674", size = 280583, upload-time = "2025-03-19T14:41:14.638Z" },
+]
+
+[[package]]
+name = "wikipedia-api"
+version = "0.10.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cb/59/a6f5790043cff046658d44bc5b594a7d0cc0d9a1a6911a0df6e7aba2179c/wikipedia_api-0.10.2.tar.gz", hash = "sha256:93fc84d2d88b043c626a03bc013a741c206ab60c0517bfce51fa60a0edc5087d", size = 29841, upload-time = "2026-03-06T22:01:16.615Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/34/41/cf1ceb3071b58175d6960d5f45bfd5c007fc8ab5bec8ca189efd02bb05e4/wikipedia_api-0.10.2-py3-none-any.whl", hash = "sha256:0aa6d09e46909d396d81af97de5dee06004c1f823725b4f66c352b1096d48163", size = 22690, upload-time = "2026-03-06T22:01:15.024Z" },
 ]
 
 [[package]]
