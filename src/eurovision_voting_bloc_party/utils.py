@@ -113,7 +113,6 @@ def fetch_wikipedia_page(wiki: wikipediaapi.Wikipedia, year: str) -> dict | None
     Returns:
         Dict with year, title, text, and summary, or None if the page doesn't exist.
     """
-
     page = wiki.page(f"Eurovision_Song_Contest_{year}")
     if page.exists():
         return {
