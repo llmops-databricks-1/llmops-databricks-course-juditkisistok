@@ -1,6 +1,7 @@
 # Databricks notebook source
 # COMMAND ----------
 ## Use case: An agent that answers questions about Eurovision.
+import wikipediaapi
 from databricks.sdk import WorkspaceClient
 from loguru import logger
 from openai import OpenAI
@@ -39,8 +40,8 @@ logger.info(f"Schema {CATALOG}.{SCHEMA} ready")
 # COMMAND ----------
 # Section 1: Load Kaggle CSV and write to Delta table
 kaggle_dict = {
-    type: load_eurovision_data_from_kaggle(type)
-    for type in ["contest", "country", "song"]
+    data_type: load_eurovision_data_from_kaggle(data_type)
+    for data_type in ["contest", "country", "song"]
 }
 
 eurovision_dataset = prepare_eurovision_tabular_data(kaggle_dict)
@@ -56,9 +57,10 @@ read_delta_table(spark, CATALOG, SCHEMA, TABLE_NAME)
 # COMMAND ----------
 # Section 2: Wikipedia ingestion
 years = [str(year) for year in range(1956, 2026)]
+wiki = wikipediaapi.Wikipedia(user_agent="EurovisionVotingBlocParty/1.0", language="en")
 
 wikipedia_data = [
-    page for year in years if (page := fetch_wikipedia_page(year)) is not None
+    page for year in years if (page := fetch_wikipedia_page(wiki, year)) is not None
 ]
 
 wikipedia_spark_df = spark.createDataFrame(wikipedia_data)

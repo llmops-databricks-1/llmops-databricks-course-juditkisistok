@@ -9,13 +9,11 @@ from loguru import logger
 from pyspark.sql import DataFrame as SparkDataFrame
 from pyspark.sql import SparkSession
 
-## CONSTANTS
 TABLE_NAME = "eurovision_data"
 TABLE_NAME_WIKI = "eurovision_wikipedia"
 TABLE_NAME_ARXIV = "eurovision_arxiv"
 
 
-## FUNCTIONS
 def load_eurovision_data_from_kaggle(kaggle_data_type: str) -> pl.DataFrame:
     """Load a Eurovision dataset CSV from Kaggle as a Polars DataFrame.
 
@@ -105,18 +103,16 @@ def read_delta_table(
     df.show(5)
 
 
-def fetch_wikipedia_page(year: str) -> str:
+def fetch_wikipedia_page(wiki: wikipediaapi.Wikipedia, year: str) -> dict | None:
     """Fetch a Wikipedia page for a Eurovision Song Contest year.
 
     Args:
+        wiki: Initialized Wikipedia API client.
         year: The contest year as a string, e.g. '2024'.
 
     Returns:
         Dict with year, title, text, and summary, or None if the page doesn't exist.
     """
-    wiki = wikipediaapi.Wikipedia(
-        user_agent="EurovisionVotingBlocParty/1.0", language="en"
-    )
 
     page = wiki.page(f"Eurovision_Song_Contest_{year}")
     if page.exists():
@@ -128,7 +124,7 @@ def fetch_wikipedia_page(year: str) -> str:
         }
 
 
-def fetch_arxiv_data(query: str = "eurovision", max_results: int = 50) -> list:
+def fetch_arxiv_data(query: str = "eurovision", max_results: int = 50) -> list[dict]:
     """Fetch papers from arXiv matching the given query.
 
     Args:
