@@ -1,10 +1,6 @@
 # Databricks notebook source
 # COMMAND ----------
 ## Use case: An agent that answers questions about Eurovision.
-from datetime import datetime
-
-import arxiv
-import wikipediaapi
 from databricks.sdk import WorkspaceClient
 from loguru import logger
 from openai import OpenAI
@@ -16,8 +12,11 @@ from eurovision_voting_bloc_party.utils import (
     TABLE_NAME,
     TABLE_NAME_ARXIV,
     TABLE_NAME_WIKI,
+    fetch_arxiv_data,
+    fetch_wikipedia_page,
     load_eurovision_data_from_kaggle,
     prepare_eurovision_tabular_data,
+    read_delta_table,
     write_to_delta_table,
 )
 
@@ -50,40 +49,13 @@ eurovision_dataset = prepare_eurovision_tabular_data(kaggle_dict)
 df = spark.createDataFrame(eurovision_dataset.to_arrow())
 write_to_delta_table(df, CATALOG, SCHEMA, TABLE_NAME)
 
-
-# COMMAND ----------
 # Verify the data - read back the table and show some records
-def read_delta_table(catalog: str, schema: str, table_name: str) -> None:
-    df = spark.table(f"{catalog}.{schema}.{table_name}")
-
-    logger.info(f"Table: {catalog}.{schema}.{table_name}")
-    logger.info(f"Total records: {df.count()}")
-    logger.info("Schema:")
-    df.printSchema()
-
-    logger.info("Sample records:")
-    df.show(5)
-
-
-read_delta_table(CATALOG, SCHEMA, TABLE_NAME)
+read_delta_table(spark, CATALOG, SCHEMA, TABLE_NAME)
 
 
 # COMMAND ----------
 # Section 2: Wikipedia ingestion
 years = [str(year) for year in range(1956, 2026)]
-wiki = wikipediaapi.Wikipedia(user_agent="EurovisionVotingBlocParty/1.0", language="en")
-
-
-def fetch_wikipedia_page(year: str) -> str:
-    page = wiki.page(f"Eurovision_Song_Contest_{year}")
-    if page.exists():
-        return {
-            "year": year,
-            "title": page.title,
-            "text": page.text,
-            "summary": page.summary,
-        }
-
 
 wikipedia_data = [
     page for year in years if (page := fetch_wikipedia_page(year)) is not None
@@ -92,34 +64,11 @@ wikipedia_data = [
 wikipedia_spark_df = spark.createDataFrame(wikipedia_data)
 
 write_to_delta_table(wikipedia_spark_df, CATALOG, SCHEMA, TABLE_NAME_WIKI)
-read_delta_table(CATALOG, SCHEMA, TABLE_NAME_WIKI)
+read_delta_table(spark, CATALOG, SCHEMA, TABLE_NAME_WIKI)
 
 
 # COMMAND ----------
 # Section 3: ArXiv ingestion
-def fetch_arxiv_data(query: str = "eurovision", max_results: int = 50) -> list:
-    search = arxiv.Search(
-        query=query, max_results=max_results, sort_by=arxiv.SortCriterion.Relevance
-    )
-    results = []
-    for result in search.results():
-        paper = {
-            "arxiv_id": result.entry_id.split("/")[-1],
-            "title": result.title,
-            "authors": [author.name for author in result.authors],
-            "summary": result.summary,
-            "published": int(result.published.strftime("%Y%m%d%H%M")),
-            "updated": result.updated.isoformat() if result.updated else None,
-            "categories": ", ".join(result.categories),
-            "pdf_url": result.pdf_url,
-            "primary_category": result.primary_category,
-            "ingestion_timestamp": datetime.now().isoformat(),
-        }
-        results.append(paper)
-    logger.info(f"Fetched {len(results)} papers from arXiv for query '{query}'")
-    return results
-
-
 papers_list = fetch_arxiv_data(max_results=50)
 logger.info("Sample paper:")
 logger.info(f"Title: {papers_list[0]['title']}")
@@ -144,7 +93,7 @@ arxiv_schema = StructType(
 arxiv_spark_df = spark.createDataFrame(papers_list, schema=arxiv_schema)
 
 write_to_delta_table(arxiv_spark_df, CATALOG, SCHEMA, TABLE_NAME_ARXIV)
-read_delta_table(CATALOG, SCHEMA, TABLE_NAME_ARXIV)
+read_delta_table(spark, CATALOG, SCHEMA, TABLE_NAME_ARXIV)
 
 # COMMAND ----------
 # Section 4: Experiment with LLMs
