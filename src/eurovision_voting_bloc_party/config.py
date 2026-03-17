@@ -15,7 +15,7 @@ class ProjectConfig(BaseModel):
     llm_endpoint: str = Field(..., description="LLM endpoint name")
     system_prompt: str = Field(
         default="You are a helpful AI assistant that helps users learn about Eurovision.",
-        description="System prompt for the agent"
+        description="System prompt for the agent",
     )
 
     model_config = {"populate_by_name": True}
@@ -32,8 +32,10 @@ class ProjectConfig(BaseModel):
             ProjectConfig instance
         """
         if env not in ["prd", "acc", "dev"]:
-            raise ValueError(f"Invalid environment: {env}. \
-                             Expected 'prd', 'acc', or 'dev'")
+            raise ValueError(
+                f"Invalid environment: {env}. \
+                             Expected 'prd', 'acc', or 'dev'"
+            )
 
         with open(config_path) as f:
             config_data = yaml.safe_load(f)
@@ -58,8 +60,10 @@ class ProjectConfig(BaseModel):
         """Get fully qualified volume path."""
         return f"{self.catalog}.{self.schema}.{self.volume}"
 
-def load_config(config_path: str = "project_config.yml", env: str = "dev") \
-    -> ProjectConfig:
+
+def load_config(
+    config_path: str = "project_config.yml", env: str = "dev"
+) -> ProjectConfig:
     """Load project configuration.
 
     Args:
@@ -81,6 +85,7 @@ def load_config(config_path: str = "project_config.yml", env: str = "dev") \
             current = current.parent
 
     return ProjectConfig.from_yaml(config_path, env)
+
 
 def get_env(spark: SparkSession) -> str:
     """Get current environment from dbutils widget, falling back to ENV variable or 'dev'.

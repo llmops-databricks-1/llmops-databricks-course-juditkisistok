@@ -481,7 +481,7 @@ wheels = [
 
 [[package]]
 name = "databricks-connect"
-version = "18.1.1"
+version = "17.3.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "databricks-sdk" },
@@ -498,7 +498,7 @@ dependencies = [
     { name = "zstandard" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/df/f8/f3b5033d5fc3db90dcfcf06c4d0fa888b7b1c8444dfd6504c8ed040c8618/databricks_connect-18.1.1-py2.py3-none-any.whl", hash = "sha256:3bbade4e200b7cd0877f526ce20cb4cc315ae96b498cf069afb122c6c45a8565", size = 2841550, upload-time = "2026-03-03T09:39:12.949Z" },
+    { url = "https://files.pythonhosted.org/packages/ea/fb/8efd0a9ca8b29b70afc942b706253280e44ec02c7f6634692609659ad7a4/databricks_connect-17.3.7-py2.py3-none-any.whl", hash = "sha256:1f9376536a7d8d0f3bb64aba81c74cfd970fb506febe71e0a32249295c7df38d", size = 2746682, upload-time = "2026-03-03T12:11:19.08Z" },
 ]
 
 [[package]]
@@ -1526,7 +1526,7 @@ requires-dist = [
     { name = "claudetracing", marker = "extra == 'dev'", specifier = ">=0.2.0,<1" },
     { name = "cloudpickle", specifier = "==3.1.2" },
     { name = "databricks-agents", specifier = "==1.9.3" },
-    { name = "databricks-connect", marker = "extra == 'dev'", specifier = ">=18.1.1,<19" },
+    { name = "databricks-connect", marker = "extra == 'dev'", specifier = ">=17.0,<18" },
     { name = "databricks-mcp", specifier = "==0.9.0" },
     { name = "databricks-sdk", specifier = "==0.100.0" },
     { name = "databricks-vectorsearch", specifier = "==0.66" },
