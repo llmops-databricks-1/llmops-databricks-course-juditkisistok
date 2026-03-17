@@ -4,40 +4,40 @@ dynamic = ["version"]
 description = "llmops-databricks-course-juditkisistok - LLMOps Course on Databricks"
 requires-python = ">=3.12, <3.13"
 dependencies = [
-    "cffi==1.17.1",
-    "cloudpickle==3.1.1",
-    "numpy==2.4.0",
-    "pandas==2.3.0",
-    "pyarrow==22.0.0",
-    "databricks-sdk==0.85.0",
-    "pydantic==2.11.7",
+    "cffi==2.0.0",
+    "cloudpickle==3.1.2",
+    "numpy==2.4.3",
+    "pandas==2.2.3",
+    "pyarrow==23.0.1",
+    "databricks-sdk==0.100.0",
+    "pydantic==2.12.5",
     "loguru==0.7.3",
-    "python-dotenv==1.1.1",
-    "databricks-vectorsearch==0.63",
-    "openai==2.8.0",
-    "databricks-mcp==0.4.0",
+    "python-dotenv==1.2.2",
+    "databricks-vectorsearch==0.66",
+    "openai==2.29.0",
+    "databricks-mcp==0.9.0",
     "backoff==2.2.1",
-    "mlflow==3.8.1",
+    "mlflow==3.10.1",
     "nest-asyncio==1.6.0",
-    "arxiv==2.3.1",
-    "databricks-agents==1.8.2",
-    "psycopg==3.3.2",
+    "arxiv==2.4.1",
+    "databricks-agents==1.9.3",
+    "psycopg==3.3.3",
     "psycopg-pool==3.3.0",
-    "psycopg[binary]==3.3.2",
-    "polars>=1.39.0",
-    "kagglehub>=1.0.0",
-    "wikipedia-api>=0.10.2",
+    "psycopg[binary]==3.3.3",
+    "polars==1.39.2",
+    "kagglehub==1.0.0",
+    "wikipedia-api==0.10.2",
 ]
 
 [project.optional-dependencies]
-dev = ["databricks-connect>=17.0, <18",
-       "ipykernel>=6.29.5, <7",
-       "pip>=25.0.1, <26",
-       "pre-commit>=4.1.0, <5",
-       "claudetracing>=0.2.0, <1",]
+dev = ["databricks-connect>=18.1.1,<19",
+       "ipykernel>=7.2.0,<8",
+       "pip>=26.0.1,<27",
+       "pre-commit>=4.5.1,<5",
+       "claudetracing>=0.2.0,<1",]
 
-ci = ["pre-commit>=4.1.0, <5",
-      "pytest>=8.3.4, <9"]
+ci = ["pre-commit>=4.5.1,<5",
+      "pytest>=9.0.2,<10"]
 
 [tool.setuptools]
 include-package-data = true

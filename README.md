@@ -6,7 +6,7 @@ LLM-powered Q&A system for Eurovision Song Contest data using Databricks.
 
 ## Overview
 
-Ingests Eurovision contest data from Kaggle and Wikipedia, stores it in Delta tables, and uses Databricks LLMs to answer questions about Eurovision history.
+In the end, this will combine structured data (from Kaggle), Wikipedia articles, and academic papers (from ArXiv) into a retrieval-augmented Q&A system that lets you ask natural-language questions about the Eurovision Song Contest. Built on Databricks, currently using Delta tables and a Llama 4 endpoint.
 
 ## Setup
 
