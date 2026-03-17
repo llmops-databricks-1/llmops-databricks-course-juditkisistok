@@ -134,11 +134,12 @@ def fetch_arxiv_data(query: str = "eurovision", max_results: int = 50) -> list[d
     Returns:
         List of dicts with paper metadata including title, authors, summary, and PDF URL.
     """
+    client = arxiv.Client(delay_seconds=3, num_retries=5)
     search = arxiv.Search(
         query=query, max_results=max_results, sort_by=arxiv.SortCriterion.Relevance
     )
     results = []
-    for result in search.results():
+    for result in client.results(search):
         paper = {
             "arxiv_id": result.entry_id.split("/")[-1],
             "title": result.title,
