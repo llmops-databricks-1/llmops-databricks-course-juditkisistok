@@ -1,0 +1,8 @@
+# Project Configuration for LLMOps Course
+
+# Development environment
+dev:
+  catalog: llmops_course
+  schema: eurovision
+  volume: eurovision_data
+  llm_endpoint: databricks-llama-4-maverick

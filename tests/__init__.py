@@ -1,1 +1,1 @@
-"""Tests for llmops-databricks-course-juditkisistok."""
+"""Tests for eurovision_voting_bloc_party."""
