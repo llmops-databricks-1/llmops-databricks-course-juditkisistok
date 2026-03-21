@@ -5,6 +5,7 @@ import time
 import urllib.request
 
 import arxiv
+import wikipediaapi
 from loguru import logger
 from pyspark.sql import SparkSession
 from pyspark.sql import types as T
@@ -312,6 +313,50 @@ class WikipediaProcessor:
     def __init__(self, spark: SparkSession, config: ProjectConfig) -> None:
         self.spark = spark
         self.cfg = config
+        self.years = [str(year) for year in range(1956, 2026)]
+        self.wiki = wikipediaapi.Wikipedia(
+            user_agent="EurovisionVotingBlocParty/1.0", language="en"
+        )
+
+    def fetch_wikipedia_page(self, year: str) -> dict | None:
+        """Fetch a Wikipedia page for a Eurovision Song Contest year.
+
+        Args:
+            wiki: Initialized Wikipedia API client.
+            year: The contest year as a string, e.g. '2024'.
+
+        Returns:
+            Dict with year, title, text, and summary, or None if the page doesn't exist.
+        """
+        page = self.wiki.page(f"Eurovision_Song_Contest_{year}")
+        if page.exists():
+            return {
+                "year": year,
+                "title": page.title,
+                "summary": page.summary,
+                "sections": self._extract_sections(page.sections),
+            }
+
+    def _extract_sections(self, text: str) -> list[dict]:
+        result = []
+        for section in text:
+            if section.text.strip():
+                result.append(
+                    {
+                        "section_title": section.title,
+                        "section_text": section.text,
+                    }
+                )
+            result.extend(self._extract_sections(section.sections))
+        return result
+
+    def get_all_wikipedia_pages(self) -> list[dict]:
+        wikipedia_data = [
+            page
+            for year in self.years
+            if (page := self.fetch_wikipedia_page(self.wiki, year)) is not None
+        ]
+        return wikipedia_data
 
     def process_and_save(self) -> None:
         pass
