@@ -485,7 +485,7 @@ class KaggleProcessor:
         )
         return country_stats
 
-    def _format_summary(self, row: list) -> pl.DataFrame:
+    def _format_summary(self, row: dict) -> pl.DataFrame:
         years = sorted(row["years"])
         year_range = f"{years[0]}–{years[-1]}"
         if row["wins"] > 0:
@@ -499,13 +499,23 @@ class KaggleProcessor:
             wins_text = " They have never won."
         languages_text = f" They have performed in: {', '.join(row['languages'])}."
         styles_text = f" Their musical styles include: {', '.join(row['styles'])}."
+        avg_place_text = (
+            f" Their average placement is {row['avg_place']},"
+            if row["avg_place"] is not None
+            else ""
+        )
+        best_place_text = (
+            f" with a best placement of {int(row['best_place'])}."
+            if row["best_place"] is not None
+            else ""
+        )
         return (
             f"{row['country']} has participated in Eurovision"
             f"{row['participations']} times "
             f"({year_range}), representing {row['region']}."
             f"{wins_text}"
-            f" Their average placement is {row['avg_place']}, "
-            f"with a best placement of {int(row['best_place'])}."
+            f" {avg_place_text} "
+            f"{best_place_text}"
             f"{languages_text}"
             f"{styles_text}"
         )
@@ -520,13 +530,14 @@ class KaggleProcessor:
             .str.replace_all(" ", "_")
             .str.to_lowercase()
             .alias("chunk_id"),
-        )
+        ).select(["chunk_id", "text"])
 
         kaggle_table = f"{self.cfg.catalog}.{self.cfg.schema}.eurovision_kaggle_chunks"
         self.spark.createDataFrame(country_stats.to_arrow()).write.format("delta").mode(
             "overwrite"
         ).saveAsTable(kaggle_table)
-        self.spark.sql(
-            f"ALTER TABLE {kaggle_table}"
-            f"SET TBLPROPERTIES (delta.enableChangeDataFeed = true)"
-        )
+
+        self.spark.sql(f"""
+            ALTER TABLE {kaggle_table}
+            SET TBLPROPERTIES (delta.enableChangeDataFeed = true)
+        """)
