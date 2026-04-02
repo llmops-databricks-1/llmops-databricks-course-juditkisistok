@@ -65,7 +65,7 @@ vs_manager.sync_index(
 # Step 5: Testing vector search - arXiv
 
 results = vs_manager.search(
-    query="What kind of academic research did Eurovision inspire?",
+    query="cultural dynamics",
     index_name=f"{CATALOG}.{SCHEMA}.arxiv_chunks_index",
     columns=["id", "text", "title", "authors"],
     num_results=3,

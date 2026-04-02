@@ -401,7 +401,7 @@ class WikipediaProcessor:
                     result.append(
                         {
                             "section_title": section.title,
-                            "section_text": chunk,
+                            "text": chunk,
                             "sub_chunk_idx": idx,
                         }
                     )
