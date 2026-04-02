@@ -2,6 +2,7 @@
 # COMMAND ----------
 from loguru import logger
 from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
 
 from eurovision_voting_bloc_party.config import get_env, load_config
 from eurovision_voting_bloc_party.data_processors import (
@@ -40,6 +41,31 @@ wikipedia_data_processor.process_and_save()
 # Step 3: process Kaggle data
 kaggle_data_processor = KaggleProcessor(spark=spark, config=cfg)
 kaggle_data_processor.process_and_save()
+
+# COMMAND ----------
+# Sanity check: chunk stats
+
+for table, label in [
+    (f"{CATALOG}.{SCHEMA}.arxiv_chunks_table", "arXiv"),
+    (f"{CATALOG}.{SCHEMA}.eurovision_wikipedia_chunks", "Wikipedia"),
+    (f"{CATALOG}.{SCHEMA}.eurovision_kaggle_chunks", "Kaggle"),
+]:
+    stats = (
+        spark.table(table)
+        .select(
+            F.count("*").alias("total_chunks"),
+            F.avg(F.length("text")).alias("avg_length"),
+            F.min(F.length("text")).alias("min_length"),
+            F.max(F.length("text")).alias("max_length"),
+        )
+        .collect()[0]
+    )
+    logger.info(f"{label} chunks:")
+    logger.info(f"  Total:   {stats['total_chunks']}")
+    logger.info(f"  Avg len: {stats['avg_length']:.0f} chars")
+    logger.info(f"  (~{stats['avg_length'] / 4:.0f} tokens)")
+    logger.info(f"  Min len: {stats['min_length']} chars")
+    logger.info(f"  Max len: {stats['max_length']} chars")
 
 # COMMAND ----------
 # Step 4: create vector search index
