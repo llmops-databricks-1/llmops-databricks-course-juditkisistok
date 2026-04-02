@@ -70,10 +70,16 @@ class VectorSearchManager:
         primary_key: str,
         embedding_source_column: str = "text",
     ) -> VectorSearchIndex:
-        """Create or get vector search index.
+        """Create a delta sync index if it doesn't exist, or return the existing one.
+
+        Args:
+            index_name: Fully qualified index name (catalog.schema.index)
+            source_table: Fully qualified source Delta table name
+            primary_key: Primary key column of the source table
+            embedding_source_column: Column to embed (default: "text")
 
         Returns:
-            Vector search index object
+            VectorSearchIndex object
         """
         self.create_endpoint_if_not_exists()
 
@@ -107,7 +113,16 @@ class VectorSearchManager:
             return self.client.get_index(index_name=index_name)
 
     def sync_index(self, index_name: str, source_table: str, primary_key: str) -> None:
-        """Sync the vector search index with the source table."""
+        """Create or get the index and trigger a sync with the source table.
+
+        Retries up to 5 times with increasing backoff if the endpoint is not
+        yet ready (common immediately after endpoint creation).
+
+        Args:
+            index_name: Fully qualified index name (catalog.schema.index)
+            source_table: Fully qualified source Delta table name
+            primary_key: Primary key column of the source table
+        """
         index = self.create_or_get_index(index_name, source_table, primary_key)
         logger.info(f"Syncing vector search index: {index_name}")
         index.sync()
@@ -122,20 +137,24 @@ class VectorSearchManager:
         filters: dict | None = None,
         query_type: str = "hybrid",
     ) -> dict:
-        """Search the vector index.
+        """Search a vector index using similarity search.
 
         Args:
             query: Search query text
+            index_name: Fully qualified index name to search
+            columns: Columns to return in results (default: ["id", "text"])
             num_results: Number of results to return
-            filters: Optional filters to apply
+            filters: Optional metadata filters to apply
+            query_type: Search type — "hybrid" (semantic + keyword) or
+                "ann" (semantic only)
 
         Returns:
-            Search results dictionary
+            Raw search results dictionary with manifest and result keys
         """
         index = self.client.get_index(index_name=index_name)
         results = index.similarity_search(
             query_text=query,
-            columns=columns or ["id", "text", "metadata"],
+            columns=columns or ["id", "text"],
             num_results=num_results,
             filters=filters,
             query_type=query_type,
@@ -143,6 +162,14 @@ class VectorSearchManager:
         return results
 
     def parse_results(self, results: dict) -> list[dict]:
+        """Parse raw vector search results into a list of dictionaries.
+
+        Args:
+            results: Raw results dict from similarity_search()
+
+        Returns:
+            List of dicts with column names as keys
+        """
         columns = [col["name"] for col in results.get("manifest", {}).get("columns", [])]
         data_array = results.get("result", {}).get("data_array", [])
         return [dict(zip(columns, row, strict=False)) for row in data_array]

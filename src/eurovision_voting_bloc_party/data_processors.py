@@ -334,7 +334,15 @@ class DataProcessor:
 
 
 class WikipediaProcessor:
+    """Fetches Eurovision Wikipedia pages, splits them into chunks, and saves to Delta."""
+
     def __init__(self, spark: SparkSession, config: ProjectConfig) -> None:
+        """Initialize WikipediaProcessor with Spark session and configuration.
+
+        Args:
+            spark: SparkSession instance
+            config: ProjectConfig object with table configurations
+        """
         self.spark = spark
         self.cfg = config
         self.catalog = config.catalog
@@ -365,8 +373,17 @@ class WikipediaProcessor:
             }
 
     def _split_into_chunks(self, text: str, chunk_size: int = 1000) -> list[str]:
-        """
-        Split text into chunks of a specified size, trying to split on natural boundaries.
+        """Split text into chunks, preferring natural boundaries over hard cuts.
+
+        Tries paragraph breaks, then sentence boundaries, then word boundaries,
+        falling back to hard character splits only as a last resort.
+
+        Args:
+            text: Text to split
+            chunk_size: Maximum character length per chunk
+
+        Returns:
+            List of text chunks each within chunk_size characters
         """
         if len(text) <= chunk_size:
             return [text]
@@ -394,6 +411,14 @@ class WikipediaProcessor:
         return [text[i : i + chunk_size] for i in range(0, len(text), chunk_size)]
 
     def _extract_sections(self, sections: list) -> list[dict]:
+        """Recursively extract and chunk text from Wikipedia page sections.
+
+        Args:
+            sections: List of wikipediaapi section objects
+
+        Returns:
+            List of dicts with section_title, text, and sub_chunk_idx
+        """
         result = []
         for section in sections:
             if section.text.strip():
@@ -408,7 +433,18 @@ class WikipediaProcessor:
             result.extend(self._extract_sections(section.sections))
         return result
 
-    def _flatten_page(self, page: dict) -> dict:
+    def _flatten_page(self, page: dict) -> pl.DataFrame:
+        """Flatten a page dict into a Polars DataFrame with one row per chunk.
+
+        Adds year, title, summary, and a unique chunk_id to each row.
+
+        Args:
+            page: Dict with keys year, title, summary, and sections
+
+        Returns:
+            Polars DataFrame with columns: section_title, text, sub_chunk_idx,
+            year, title, summary, chunk_id
+        """
         flat_df = (
             pl.DataFrame(page["sections"])
             .with_columns(pl.lit(page["year"]).alias("year"))
@@ -430,7 +466,12 @@ class WikipediaProcessor:
 
         return flat_df
 
-    def get_all_wikipedia_pages(self) -> list[dict]:
+    def get_all_wikipedia_pages(self) -> pl.DataFrame:
+        """Fetch and flatten all Eurovision Wikipedia pages for years 1956–2025.
+
+        Returns:
+            Concatenated Polars DataFrame of all pages and their chunks
+        """
         wikipedia_data = [
             self._flatten_page(page)
             for year in self.years
@@ -439,6 +480,7 @@ class WikipediaProcessor:
         return pl.concat(wikipedia_data)
 
     def process_and_save(self) -> None:
+        """Fetch all Wikipedia pages, write chunks to Delta, and enable CDF."""
         all_pages = self.get_all_wikipedia_pages()
         spark_df = self.spark.createDataFrame(all_pages.to_arrow())
 
@@ -454,11 +496,25 @@ class WikipediaProcessor:
 
 
 class KaggleProcessor:
+    """Loads Eurovision Kaggle datasets and produces one text summary per country."""
+
     def __init__(self, spark: SparkSession, config: ProjectConfig) -> None:
+        """Initialize KaggleProcessor with Spark session and configuration.
+
+        Args:
+            spark: SparkSession instance
+            config: ProjectConfig object with table configurations
+        """
         self.spark = spark
         self.cfg = config
 
     def _aggregate_data_by_country(self) -> pl.DataFrame:
+        """Load and join Kaggle datasets, then aggregate statistics per country.
+
+        Returns:
+            Polars DataFrame with one row per country containing participation
+            stats, win history, languages, and musical styles
+        """
         kaggle_dict = {
             c: load_eurovision_data_from_kaggle(c) for c in ["contest", "country", "song"]
         }
@@ -485,7 +541,15 @@ class KaggleProcessor:
         )
         return country_stats
 
-    def _format_summary(self, row: dict) -> pl.DataFrame:
+    def _format_summary(self, row: dict) -> str:
+        """Serialize a country's aggregated stats into a natural language summary.
+
+        Args:
+            row: Dict with country stats from _aggregate_data_by_country
+
+        Returns:
+            Natural language string describing the country's Eurovision history
+        """
         years = sorted(row["years"])
         year_range = f"{years[0]}–{years[-1]}"
         if row["wins"] > 0:
@@ -521,6 +585,8 @@ class KaggleProcessor:
         )
 
     def process_and_save(self) -> None:
+        """Aggregate Kaggle data by country, write text summaries to Delta,
+        and enable CDF."""
         country_stats = self._aggregate_data_by_country()
         country_stats = country_stats.with_columns(
             pl.struct(country_stats.columns)
