@@ -20,6 +20,10 @@ from pyspark.sql.functions import (
 from pyspark.sql.types import ArrayType, StringType, StructField, StructType
 
 from eurovision_voting_bloc_party.config import ProjectConfig
+from eurovision_voting_bloc_party.utils import (
+    load_eurovision_data_from_kaggle,
+    prepare_eurovision_tabular_data,
+)
 
 
 class DataProcessor:
@@ -454,5 +458,75 @@ class KaggleProcessor:
         self.spark = spark
         self.cfg = config
 
+    def _aggregate_data_by_country(self) -> pl.DataFrame:
+        kaggle_dict = {
+            c: load_eurovision_data_from_kaggle(c) for c in ["contest", "country", "song"]
+        }
+        contest_df = prepare_eurovision_tabular_data(kaggle_dict)
+
+        country_stats = (
+            contest_df.sort("year")
+            .group_by("country")
+            .agg(
+                [
+                    pl.len().alias("participations"),
+                    (pl.col("final_place") == 1).sum().alias("wins"),
+                    pl.col("final_place").mean().round(1).alias("avg_place"),
+                    pl.col("final_place").min().alias("best_place"),
+                    pl.col("year").sort().alias("years"),
+                    pl.col("participant_region").first().alias("region"),
+                    pl.col("language").drop_nulls().unique().sort().alias("languages"),
+                    pl.col("style").drop_nulls().unique().sort().alias("styles"),
+                    pl.struct(["year", "song_name", "artist_name", "language", "style"])
+                    .filter(pl.col("final_place") == 1)
+                    .alias("winning_entries"),
+                ]
+            )
+        )
+        return country_stats
+
+    def _format_summary(self, row: list) -> pl.DataFrame:
+        years = sorted(row["years"])
+        year_range = f"{years[0]}–{years[-1]}"
+        if row["wins"] > 0:
+            wins_list = ", ".join(
+                f"'{e['song_name']}' by {e['artist_name']} "
+                f"({e['year']}, {e['language']}, {e['style']})"
+                for e in row["winning_entries"]
+            )
+            wins_text = f" They have won {row['wins']} time(s): {wins_list}."
+        else:
+            wins_text = " They have never won."
+        languages_text = f" They have performed in: {', '.join(row['languages'])}."
+        styles_text = f" Their musical styles include: {', '.join(row['styles'])}."
+        return (
+            f"{row['country']} has participated in Eurovision"
+            f"{row['participations']} times "
+            f"({year_range}), representing {row['region']}."
+            f"{wins_text}"
+            f" Their average placement is {row['avg_place']}, "
+            f"with a best placement of {int(row['best_place'])}."
+            f"{languages_text}"
+            f"{styles_text}"
+        )
+
     def process_and_save(self) -> None:
-        pass
+        country_stats = self._aggregate_data_by_country()
+        country_stats = country_stats.with_columns(
+            pl.struct(country_stats.columns)
+            .map_elements(self._format_summary, return_dtype=pl.String)
+            .alias("text"),
+            pl.col("country")
+            .str.replace_all(" ", "_")
+            .str.to_lowercase()
+            .alias("chunk_id"),
+        )
+
+        kaggle_table = f"{self.cfg.catalog}.{self.cfg.schema}.eurovision_kaggle_chunks"
+        self.spark.createDataFrame(country_stats.to_arrow()).write.format("delta").mode(
+            "overwrite"
+        ).saveAsTable(kaggle_table)
+        self.spark.sql(
+            f"ALTER TABLE {kaggle_table}"
+            f"SET TBLPROPERTIES (delta.enableChangeDataFeed = true)"
+        )
