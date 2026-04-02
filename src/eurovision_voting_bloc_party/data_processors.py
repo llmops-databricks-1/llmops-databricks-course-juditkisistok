@@ -5,6 +5,7 @@ import time
 import urllib.request
 
 import arxiv
+import polars as pl
 import wikipediaapi
 from loguru import logger
 from pyspark.sql import SparkSession
@@ -332,6 +333,9 @@ class WikipediaProcessor:
     def __init__(self, spark: SparkSession, config: ProjectConfig) -> None:
         self.spark = spark
         self.cfg = config
+        self.catalog = config.catalog
+        self.schema = config.schema
+        self.volume = config.volume
         self.years = [str(year) for year in range(1956, 2026)]
         self.wiki = wikipediaapi.Wikipedia(
             user_agent="EurovisionVotingBlocParty/1.0", language="en"
@@ -356,29 +360,93 @@ class WikipediaProcessor:
                 "sections": self._extract_sections(page.sections),
             }
 
-    def _extract_sections(self, text: str) -> list[dict]:
-        result = []
-        for section in text:
-            if section.text.strip():
-                result.append(
-                    {
-                        "section_title": section.title,
-                        "section_text": section.text,
-                    }
+    def _split_into_chunks(self, text: str, chunk_size: int = 1000) -> list[str]:
+        """
+        Split text into chunks of a specified size, trying to split on natural boundaries.
+        """
+        if len(text) <= chunk_size:
+            return [text]
+
+        for sep in ["\n\n", ". ", " "]:
+            parts = text.split(sep)
+            if len(parts) == 1:
+                continue
+
+            chunks, current_chunk = [], ""
+            for part in parts:
+                candidate_chunk = (
+                    (current_chunk + sep + part).strip() if current_chunk else part
                 )
+                if len(candidate_chunk) <= chunk_size:
+                    current_chunk = candidate_chunk
+                else:
+                    if current_chunk:
+                        chunks.append(current_chunk)
+                    current_chunk = part
+            if current_chunk:
+                chunks.append(current_chunk)
+            return chunks
+
+        return [text[i : i + chunk_size] for i in range(0, len(text), chunk_size)]
+
+    def _extract_sections(self, sections: list) -> list[dict]:
+        result = []
+        for section in sections:
+            if section.text.strip():
+                for idx, chunk in enumerate(self._split_into_chunks(section.text)):
+                    result.append(
+                        {
+                            "section_title": section.title,
+                            "section_text": chunk,
+                            "sub_chunk_idx": idx,
+                        }
+                    )
             result.extend(self._extract_sections(section.sections))
         return result
 
+    def _flatten_page(self, page: dict) -> dict:
+        flat_df = (
+            pl.DataFrame(page["sections"])
+            .with_columns(pl.lit(page["year"]).alias("year"))
+            .with_columns(pl.lit(page["title"]).alias("title"))
+            .with_columns(pl.lit(page["summary"]).alias("summary"))
+            .with_columns(
+                pl.concat_str(
+                    [
+                        pl.col("year"),
+                        pl.col("section_title")
+                        .str.replace_all(" ", "_")
+                        .str.to_lowercase(),
+                        pl.col("sub_chunk_idx").cast(pl.String),
+                    ],
+                    separator="_",
+                ).alias("chunk_id")
+            )
+        )
+
+        return flat_df
+
     def get_all_wikipedia_pages(self) -> list[dict]:
         wikipedia_data = [
-            page
+            self._flatten_page(page)
             for year in self.years
-            if (page := self.fetch_wikipedia_page(self.wiki, year)) is not None
+            if (page := self.fetch_wikipedia_page(year)) is not None
         ]
-        return wikipedia_data
+        return pl.concat(wikipedia_data)
 
     def process_and_save(self) -> None:
-        pass
+        all_pages = self.get_all_wikipedia_pages()
+        spark_df = self.spark.createDataFrame(all_pages.to_arrow())
+
+        wiki_table = f"{self.catalog}.{self.schema}.eurovision_wikipedia_chunks"
+        spark_df.write.format("delta").mode("overwrite").saveAsTable(wiki_table)
+        logger.info(f"Saved Wikipedia data to {wiki_table}")
+
+        self.spark.sql(f"""
+            ALTER TABLE {wiki_table}
+            SET TBLPROPERTIES (delta.enableChangeDataFeed = true)
+        """)
+        logger.info(f"Change Data Feed enabled for {wiki_table}")
 
 
 class KaggleProcessor:
