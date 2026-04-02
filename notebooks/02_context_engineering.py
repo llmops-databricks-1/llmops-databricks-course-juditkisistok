@@ -71,7 +71,7 @@ results = vs_manager.search(
     num_results=3,
 )
 logger.info("arXiv results:")
-for row in results["result"]["data_array"]:
+for row in vs_manager.parse_results(results):
     logger.info(row)
 
 # COMMAND ----------
@@ -84,7 +84,7 @@ results = vs_manager.search(
     num_results=3,
 )
 logger.info("Wikipedia results:")
-for row in results["result"]["data_array"]:
+for row in vs_manager.parse_results(results):
     logger.info(row)
 
 # COMMAND ----------
@@ -96,5 +96,5 @@ results = vs_manager.search(
     num_results=3,
 )
 logger.info("Kaggle results:")
-for row in results["result"]["data_array"]:
+for row in vs_manager.parse_results(results):
     logger.info(row)

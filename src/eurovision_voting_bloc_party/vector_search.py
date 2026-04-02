@@ -139,3 +139,8 @@ class VectorSearchManager:
             filters=filters,
         )
         return results
+
+    def parse_results(self, results: dict) -> list[dict]:
+        columns = [col["name"] for col in results.get("manifest", {}).get("columns", [])]
+        data_array = results.get("result", {}).get("data_array", [])
+        return [dict(zip(columns, row, strict=False)) for row in data_array]
