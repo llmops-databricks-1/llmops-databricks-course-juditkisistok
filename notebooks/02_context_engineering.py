@@ -69,7 +69,7 @@ for table, label in [
 
 # COMMAND ----------
 # Step 4: create vector search index
-vs_manager = VectorSearchManager(config=cfg)
+vs_manager = VectorSearchManager(spark=spark, config=cfg)
 
 vs_manager.create_unified_table(
     source_tables={
