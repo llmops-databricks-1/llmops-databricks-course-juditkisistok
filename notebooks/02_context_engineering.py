@@ -60,3 +60,41 @@ vs_manager.sync_index(
     f"{CATALOG}.{SCHEMA}.eurovision_kaggle_chunks",
     "chunk_id",
 )
+
+# COMMAND ----------
+# Step 5: Testing vector search - arXiv
+
+results = vs_manager.search(
+    query="What kind of academic research did Eurovision inspire?",
+    index_name=f"{CATALOG}.{SCHEMA}.arxiv_chunks_index",
+    columns=["id", "text", "title", "authors"],
+    num_results=3,
+)
+logger.info("arXiv results:")
+for row in results["result"]["data_array"]:
+    logger.info(row)
+
+# COMMAND ----------
+# Step 6: Testing vector search - Wikipedia
+
+results = vs_manager.search(
+    query="Which country won Eurovision in 2023?",
+    index_name=f"{CATALOG}.{SCHEMA}.wikipedia_chunks_index",
+    columns=["chunk_id", "text", "year"],
+    num_results=3,
+)
+logger.info("Wikipedia results:")
+for row in results["result"]["data_array"]:
+    logger.info(row)
+
+# COMMAND ----------
+# Step 7: Testing vector search - Kaggle
+results = vs_manager.search(
+    query="Which countries have won the most times?",
+    index_name=f"{CATALOG}.{SCHEMA}.kaggle_chunks_index",
+    columns=["chunk_id", "text"],
+    num_results=3,
+)
+logger.info("Kaggle results:")
+for row in results["result"]["data_array"]:
+    logger.info(row)
