@@ -71,56 +71,47 @@ for table, label in [
 # Step 4: create vector search index
 vs_manager = VectorSearchManager(config=cfg)
 
-vs_manager.sync_index(
-    f"{CATALOG}.{SCHEMA}.arxiv_chunks_index",
-    f"{CATALOG}.{SCHEMA}.arxiv_chunks_table",
-    "id",
+vs_manager.create_unified_table(
+    source_tables={
+        "arxiv": f"{CATALOG}.{SCHEMA}.arxiv_chunks_table",
+        "wikipedia": f"{CATALOG}.{SCHEMA}.eurovision_wikipedia_chunks",
+        "kaggle": f"{CATALOG}.{SCHEMA}.eurovision_kaggle_chunks",
+    },
+    unified_table=f"{CATALOG}.{SCHEMA}.eurovision_unified_chunks",
 )
-vs_manager.sync_index(
-    f"{CATALOG}.{SCHEMA}.wikipedia_chunks_index",
-    f"{CATALOG}.{SCHEMA}.eurovision_wikipedia_chunks",
-    "chunk_id",
+
+vs_manager.create_or_get_index(
+    index_name=f"{CATALOG}.{SCHEMA}.eurovision_unified_index",
+    source_table=f"{CATALOG}.{SCHEMA}.eurovision_unified_chunks",
+    primary_key="id",
 )
-vs_manager.sync_index(
-    f"{CATALOG}.{SCHEMA}.kaggle_chunks_index",
-    f"{CATALOG}.{SCHEMA}.eurovision_kaggle_chunks",
-    "chunk_id",
-)
+
+vs_manager.sync_index(f"{CATALOG}.{SCHEMA}.eurovision_unified_index")
 
 # COMMAND ----------
-# Step 5: Testing vector search - arXiv
+# Step 5: Testing vector search - all sources
 
 results = vs_manager.search(
-    query="cultural dynamics",
-    index_name=f"{CATALOG}.{SCHEMA}.arxiv_chunks_index",
-    columns=["id", "text", "title", "authors"],
-    num_results=3,
+    query="Which countries always vote for each other?",
+    index_name=f"{CATALOG}.{SCHEMA}.eurovision_unified_index",
+    columns=["id", "text", "source"],
+    num_results=5,
 )
-logger.info("arXiv results:")
+
 for row in vs_manager.parse_results(results):
     logger.info(row)
 
-# COMMAND ----------
-# Step 6: Testing vector search - Wikipedia
-
-results = vs_manager.search(
-    query="Which country won Eurovision in 2023?",
-    index_name=f"{CATALOG}.{SCHEMA}.wikipedia_chunks_index",
-    columns=["chunk_id", "text", "year"],
-    num_results=3,
-)
-logger.info("Wikipedia results:")
-for row in vs_manager.parse_results(results):
-    logger.info(row)
 
 # COMMAND ----------
-# Step 7: Testing vector search - Kaggle
+# Step 6: Testing vector search - Wikipedia only
+
 results = vs_manager.search(
-    query="Which countries have won the most times?",
-    index_name=f"{CATALOG}.{SCHEMA}.kaggle_chunks_index",
-    columns=["chunk_id", "text"],
+    query="Who won Eurovision 2023?",
+    index_name=f"{CATALOG}.{SCHEMA}.eurovision_unified_index",
+    columns=["id", "text", "source"],
+    filters={"source": "wikipedia"},
     num_results=3,
 )
-logger.info("Kaggle results:")
+
 for row in vs_manager.parse_results(results):
     logger.info(row)

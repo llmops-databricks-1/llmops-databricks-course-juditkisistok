@@ -1,7 +1,11 @@
+import time
+
 from databricks.sdk import WorkspaceClient
 from databricks.vector_search.client import VectorSearchClient
 from databricks.vector_search.index import VectorSearchIndex
 from loguru import logger
+from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
 
 from eurovision_voting_bloc_party.config import ProjectConfig
 
@@ -12,6 +16,7 @@ class VectorSearchManager:
     def __init__(
         self,
         config: ProjectConfig,
+        spark: SparkSession,
         endpoint_name: str | None = None,
         embedding_model: str | None = None,
         usage_policy_id: str | None = None,
@@ -20,18 +25,19 @@ class VectorSearchManager:
 
         Args:
             config: ProjectConfig object
+            spark: SparkSession instance
             endpoint_name: Name of the vector search endpoint (uses config if None)
             embedding_model: Name of the embedding model endpoint (uses config if None)
             usage_policy_id: ID of the usage policy for the endpoint (optional)
         """
         self.config = config
+        self.spark = spark
         self.endpoint_name = endpoint_name or config.vector_search_endpoint
         self.embedding_model = embedding_model or config.embedding_endpoint
         self.catalog = config.catalog
         self.schema = config.schema
         self.usage_policy_id = usage_policy_id
 
-        # Get credentials from WorkspaceClient for authentication
         w = WorkspaceClient()
         self.client = VectorSearchClient(
             workspace_url=w.config.host,
@@ -63,6 +69,46 @@ class VectorSearchManager:
         else:
             logger.info(f"✓ Vector search endpoint exists: {self.endpoint_name}")
 
+    def create_unified_table(
+        self,
+        source_tables: dict[str, str],
+        unified_table: str,
+    ) -> None:
+        """Union multiple chunk tables into a single Delta table for indexing.
+
+        Each source table must have a `text` column. IDs are prefixed with the
+        source name to avoid collisions (e.g. "arxiv_chunk_001").
+
+        Args:
+            source_tables: Dict mapping source name to fully qualified table name,
+                e.g. {"arxiv": "catalog.schema.arxiv_chunks_table"}
+            unified_table: Fully qualified name for the output unified table
+        """
+        dfs = []
+        for source, table in source_tables.items():
+            id_col = "id" if source == "arxiv" else "chunk_id"
+            dfs.append(
+                self.spark.table(table)
+                .select(
+                    F.concat_ws("_", F.lit(source), F.col(id_col)).alias("id"),
+                    F.col("text"),
+                )
+                .withColumn("source", F.lit(source))
+            )
+
+        unified_df = dfs[0]
+        for df in dfs[1:]:
+            unified_df = unified_df.union(df)
+
+        unified_df.write.format("delta").mode("overwrite").saveAsTable(unified_table)
+        logger.info(f"Written unified chunks to {unified_table}")
+
+        self.spark.sql(
+            f"ALTER TABLE {unified_table} "
+            f"SET TBLPROPERTIES (delta.enableChangeDataFeed = true)"
+        )
+        logger.info(f"CDF enabled for {unified_table}")
+
     def create_or_get_index(
         self,
         index_name: str,
@@ -83,7 +129,6 @@ class VectorSearchManager:
         """
         self.create_endpoint_if_not_exists()
 
-        # Try to get existing index
         try:
             index = self.client.get_index(index_name=index_name)
             logger.info(f"✓ Vector search index exists: {index_name}")
@@ -91,7 +136,6 @@ class VectorSearchManager:
         except Exception:
             logger.info(f"Index {index_name} not found, will create it")
 
-        # Try to create the index
         try:
             index = self.client.create_delta_sync_index(
                 endpoint_name=self.endpoint_name,
@@ -108,25 +152,31 @@ class VectorSearchManager:
         except Exception as e:
             if "RESOURCE_ALREADY_EXISTS" not in str(e):
                 raise
-            # Index exists but get_index failed earlier (transient) — retry
             logger.info(f"✓ Vector search index exists: {index_name}")
             return self.client.get_index(index_name=index_name)
 
-    def sync_index(self, index_name: str, source_table: str, primary_key: str) -> None:
-        """Create or get the index and trigger a sync with the source table.
+    def sync_index(self, index_name: str) -> None:
+        """Trigger a sync on an existing vector search index.
 
         Retries up to 5 times with increasing backoff if the endpoint is not
         yet ready (common immediately after endpoint creation).
 
         Args:
             index_name: Fully qualified index name (catalog.schema.index)
-            source_table: Fully qualified source Delta table name
-            primary_key: Primary key column of the source table
         """
-        index = self.create_or_get_index(index_name, source_table, primary_key)
+        index = self.client.get_index(index_name=index_name)
         logger.info(f"Syncing vector search index: {index_name}")
-        index.sync()
-        logger.info("✓ Index sync triggered")
+        for attempt in range(5):
+            try:
+                index.sync()
+                logger.info("✓ Index sync triggered")
+                return
+            except Exception as e:
+                if "not ready yet" not in str(e) or attempt == 4:
+                    raise
+                wait = 30 * (attempt + 1)
+                logger.info(f"Endpoint not ready, retrying in {wait}s...")
+                time.sleep(wait)
 
     def search(
         self,
@@ -152,14 +202,13 @@ class VectorSearchManager:
             Raw search results dictionary with manifest and result keys
         """
         index = self.client.get_index(index_name=index_name)
-        results = index.similarity_search(
+        return index.similarity_search(
             query_text=query,
             columns=columns or ["id", "text"],
             num_results=num_results,
             filters=filters,
             query_type=query_type,
         )
-        return results
 
     def parse_results(self, results: dict) -> list[dict]:
         """Parse raw vector search results into a list of dictionaries.
