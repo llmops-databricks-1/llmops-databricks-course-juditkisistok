@@ -9,6 +9,7 @@ from eurovision_voting_bloc_party.data_processors import (
     KaggleProcessor,
     WikipediaProcessor,
 )
+from eurovision_voting_bloc_party.vector_search import VectorSearchManager
 
 spark = SparkSession.builder.getOrCreate()
 
@@ -39,3 +40,23 @@ wikipedia_data_processor.process_and_save()
 # Step 3: process Kaggle data
 kaggle_data_processor = KaggleProcessor(spark=spark, config=cfg)
 kaggle_data_processor.process_and_save()
+
+# COMMAND ----------
+# Step 4: create vector search index
+vs_manager = VectorSearchManager(config=cfg)
+
+vs_manager.sync_index(
+    f"{CATALOG}.{SCHEMA}.arxiv_chunks_index",
+    f"{CATALOG}.{SCHEMA}.arxiv_chunks_table",
+    "id",
+)
+vs_manager.sync_index(
+    f"{CATALOG}.{SCHEMA}.wikipedia_chunks_index",
+    f"{CATALOG}.{SCHEMA}.eurovision_wikipedia_chunks",
+    "chunk_id",
+)
+vs_manager.sync_index(
+    f"{CATALOG}.{SCHEMA}.kaggle_chunks_index",
+    f"{CATALOG}.{SCHEMA}.eurovision_kaggle_chunks",
+    "chunk_id",
+)
