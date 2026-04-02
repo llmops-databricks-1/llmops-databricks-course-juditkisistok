@@ -120,6 +120,7 @@ class VectorSearchManager:
         columns: list[str] | None = None,
         num_results: int = 5,
         filters: dict | None = None,
+        query_type: str = "hybrid",
     ) -> dict:
         """Search the vector index.
 
@@ -137,6 +138,7 @@ class VectorSearchManager:
             columns=columns or ["id", "text", "metadata"],
             num_results=num_results,
             filters=filters,
+            query_type=query_type,
         )
         return results
 
