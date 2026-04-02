@@ -61,6 +61,22 @@ class DataProcessor:
             List of paper metadata dictionaries if papers were downloaded,
             otherwise None
         """
+        # check if paper table exists and load the set of already processed arxiv_ids
+        # to avoid duplicates
+        if self.spark.catalog.tableExists(self.papers_table):
+            existing_ids = {
+                row.arxiv_id
+                for row in self.spark.table(self.papers_table)
+                .select("arxiv_id")
+                .collect()
+            }
+            logger.info(
+                f"Found {len(existing_ids)} existing papers in {self.papers_table}"
+            )
+        else:
+            existing_ids = set()
+            logger.info(f"No existing papers table found at {self.papers_table}.")
+
         # Search for papers in arxiv
         client = arxiv.Client(delay_seconds=10, num_retries=3)
         search = arxiv.Search(query="eurovision")
@@ -72,6 +88,9 @@ class DataProcessor:
         for paper in papers:
             logger.info(f"Processing paper {paper.get_short_id()}")
             paper_id = paper.get_short_id().replace("/", "_")
+            if paper_id in existing_ids:
+                logger.info(f"Skipping paper {paper_id} as it already exists.")
+                continue
             try:
                 urllib.request.urlretrieve(
                     paper.pdf_url, f"{self.pdf_dir}/{paper_id}.pdf"
