@@ -40,12 +40,22 @@ arxiv_needs_update = data_processor.process_and_save()
 # COMMAND ----------
 # Step 2: process Wikipedia data
 wikipedia_data_processor = WikipediaProcessor(spark=spark, config=cfg)
-wikipedia_data_processor.process_and_save()
+wikipedia_needs_update = wikipedia_data_processor.needs_update(
+    f"{CATALOG}.{SCHEMA}.sync_metadata"
+)
+logger.info(f"Wikipedia needs update: {wikipedia_needs_update}")
+if wikipedia_needs_update:
+    wikipedia_data_processor.process_and_save()
 
 # COMMAND ----------
 # Step 3: process Kaggle data
 kaggle_data_processor = KaggleProcessor(spark=spark, config=cfg)
-kaggle_data_processor.process_and_save()
+kaggle_needs_update = kaggle_data_processor.needs_update(
+    f"{CATALOG}.{SCHEMA}.sync_metadata"
+)
+logger.info(f"Kaggle needs update: {kaggle_needs_update}")
+if kaggle_needs_update:
+    kaggle_data_processor.process_and_save()
 
 # COMMAND ----------
 # Sanity check: chunk stats

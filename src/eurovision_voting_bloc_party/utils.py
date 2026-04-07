@@ -174,8 +174,8 @@ def create_sync_metadata_table(spark: SparkSession, catalog: str, schema: str) -
 
     spark.sql(f"""
           INSERT INTO {catalog}.{schema}.sync_metadata
-          SELECT source, NULL AS last_synced
-          FROM (VALUES ('eurovision'), ('kaggle')) AS t(source)
+          SELECT source_table, NULL AS last_synced
+          FROM (VALUES ('wikipedia'), ('kaggle')) AS t(source_table)
           WHERE NOT EXISTS (
               SELECT 1 FROM {catalog}.{schema}.sync_metadata
           )

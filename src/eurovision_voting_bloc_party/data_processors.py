@@ -3,6 +3,7 @@ import os
 import re
 import time
 import urllib.request
+from datetime import datetime
 
 import arxiv
 import polars as pl
@@ -495,6 +496,36 @@ class WikipediaProcessor:
         """)
         logger.info(f"Change Data Feed enabled for {wiki_table}")
 
+        self.spark.sql(f"""
+UPDATE {self.catalog}.{self.schema}.sync_metadata
+SET last_synced = current_timestamp()
+WHERE source_table = 'wikipedia' """)
+
+    def needs_update(self, sync_metadata_table: str) -> bool:
+        """Check if Wikipedia data needs to be updated based on sync metadata.
+        It needs to be updated if there is no previous sync timestamp or
+        if the last sync was more than 6 months ago.
+
+        Args:
+            sync_metadata_table: Table name where last sync timestamps are stored
+
+        Returns:
+            True if data should be updated, False otherwise
+        """
+        last_sync = (
+            self.spark.table(sync_metadata_table)
+            .filter(col("source_table") == "wikipedia")
+            .select(col("last_synced"))
+            .collect()
+        )
+
+        last_sync_ts = last_sync[0]["last_synced"] if last_sync else None
+        if last_sync_ts is None:
+            logger.info("No previous sync timestamp found for Wikipedia. Update needed.")
+            return True
+        months_since = (datetime.now() - last_sync_ts).days / 30
+        return months_since >= 6
+
 
 class KaggleProcessor:
     """Loads Eurovision Kaggle datasets and produces one text summary per country."""
@@ -608,3 +639,33 @@ class KaggleProcessor:
             ALTER TABLE {kaggle_table}
             SET TBLPROPERTIES (delta.enableChangeDataFeed = true)
         """)
+
+        self.spark.sql(f"""
+UPDATE {self.cfg.catalog}.{self.cfg.schema}.sync_metadata
+SET last_synced = current_timestamp()
+WHERE source_table = 'kaggle' """)
+
+    def needs_update(self, sync_metadata_table: str) -> bool:
+        """Check if Kaggle data needs to be updated based on sync metadata.
+        It needs to be updated if there is no previous sync timestamp or
+        if the last sync was more than 6 months ago.
+
+        Args:
+            sync_metadata_table: Table name where last sync timestamps are stored
+
+        Returns:
+            True if data should be updated, False otherwise
+        """
+        last_sync = (
+            self.spark.table(sync_metadata_table)
+            .filter(col("source_table") == "kaggle")
+            .select(col("last_synced"))
+            .collect()
+        )
+
+        last_sync_ts = last_sync[0]["last_synced"] if last_sync else None
+        if last_sync_ts is None:
+            logger.info("No previous sync timestamp found for Kaggle. Update needed.")
+            return True
+        months_since = (datetime.now() - last_sync_ts).days / 30
+        return months_since >= 6
