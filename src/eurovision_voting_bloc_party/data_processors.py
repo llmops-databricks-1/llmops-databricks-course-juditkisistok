@@ -497,9 +497,9 @@ class WikipediaProcessor:
         logger.info(f"Change Data Feed enabled for {wiki_table}")
 
         self.spark.sql(f"""
-UPDATE {self.catalog}.{self.schema}.sync_metadata
-SET last_synced = current_timestamp()
-WHERE source_table = 'wikipedia' """)
+                       UPDATE {self.catalog}.{self.schema}.sync_metadata
+                       SET last_synced = current_timestamp()
+                       WHERE source_table = 'wikipedia' """)
 
     def needs_update(self, sync_metadata_table: str) -> bool:
         """Check if Wikipedia data needs to be updated based on sync metadata.
@@ -641,9 +641,9 @@ class KaggleProcessor:
         """)
 
         self.spark.sql(f"""
-UPDATE {self.cfg.catalog}.{self.cfg.schema}.sync_metadata
-SET last_synced = current_timestamp()
-WHERE source_table = 'kaggle' """)
+                       UPDATE {self.cfg.catalog}.{self.cfg.schema}.sync_metadata
+                       SET last_synced = current_timestamp()
+                       WHERE source_table = 'kaggle' """)
 
     def needs_update(self, sync_metadata_table: str) -> bool:
         """Check if Kaggle data needs to be updated based on sync metadata.
