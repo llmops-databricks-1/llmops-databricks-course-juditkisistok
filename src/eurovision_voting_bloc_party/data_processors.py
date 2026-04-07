@@ -322,7 +322,7 @@ class DataProcessor:
         # Only continue if we have new papers
         if records is None:
             logger.info("No new papers to process. Exiting.")
-            return
+            return False
 
         # Step 2: Parse PDFs with ai_parse_document
         self.parse_pdfs_with_ai()
@@ -331,6 +331,7 @@ class DataProcessor:
         # Step 3: Process chunks
         self.process_chunks()
         logger.info("Processing complete!")
+        return True
 
 
 class WikipediaProcessor:

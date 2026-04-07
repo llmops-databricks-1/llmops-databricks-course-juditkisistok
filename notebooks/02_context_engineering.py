@@ -35,7 +35,7 @@ data_processor = DataProcessor(spark=spark, config=cfg)
 
 logger.info(f"Catalog: {cfg.catalog}, Schema: {cfg.schema}, Volume: {cfg.volume}")
 
-data_processor.process_and_save()
+arxiv_needs_update = data_processor.process_and_save()
 
 # COMMAND ----------
 # Step 2: process Wikipedia data
