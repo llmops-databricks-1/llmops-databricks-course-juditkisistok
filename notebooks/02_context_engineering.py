@@ -10,6 +10,7 @@ from eurovision_voting_bloc_party.data_processors import (
     KaggleProcessor,
     WikipediaProcessor,
 )
+from eurovision_voting_bloc_party.utils import create_sync_metadata_table
 from eurovision_voting_bloc_party.vector_search import VectorSearchManager
 
 spark = SparkSession.builder.getOrCreate()
@@ -24,6 +25,10 @@ SCHEMA = cfg.schema
 # Create schema if it doesn't exist
 spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG}.{SCHEMA}")
 logger.info(f"Schema {CATALOG}.{SCHEMA} ready")
+
+# create sync metadata table
+create_sync_metadata_table(spark, CATALOG, SCHEMA)
+
 # COMMAND ----------
 # Step 1: process ArXiv data
 data_processor = DataProcessor(spark=spark, config=cfg)
