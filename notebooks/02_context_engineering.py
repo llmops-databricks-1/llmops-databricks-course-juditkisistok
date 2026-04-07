@@ -84,24 +84,29 @@ for table, label in [
 
 # COMMAND ----------
 # Step 4: create vector search index
+# only rebuild and sync index if any source data was updated
 vs_manager = VectorSearchManager(spark=spark, config=cfg)
 
-vs_manager.create_unified_table(
-    source_tables={
-        "arxiv": f"{CATALOG}.{SCHEMA}.arxiv_chunks_table",
-        "wikipedia": f"{CATALOG}.{SCHEMA}.eurovision_wikipedia_chunks",
-        "kaggle": f"{CATALOG}.{SCHEMA}.eurovision_kaggle_chunks",
-    },
-    unified_table=f"{CATALOG}.{SCHEMA}.eurovision_unified_chunks",
-)
+if any([arxiv_needs_update, wikipedia_needs_update, kaggle_needs_update]):
+    vs_manager.create_unified_table(
+        source_tables={
+            "arxiv": f"{CATALOG}.{SCHEMA}.arxiv_chunks_table",
+            "wikipedia": f"{CATALOG}.{SCHEMA}.eurovision_wikipedia_chunks",
+            "kaggle": f"{CATALOG}.{SCHEMA}.eurovision_kaggle_chunks",
+        },
+        unified_table=f"{CATALOG}.{SCHEMA}.eurovision_unified_chunks",
+    )
 
-vs_manager.create_or_get_index(
-    index_name=f"{CATALOG}.{SCHEMA}.eurovision_unified_index",
-    source_table=f"{CATALOG}.{SCHEMA}.eurovision_unified_chunks",
-    primary_key="id",
-)
+    vs_manager.create_or_get_index(
+        index_name=f"{CATALOG}.{SCHEMA}.eurovision_unified_index",
+        source_table=f"{CATALOG}.{SCHEMA}.eurovision_unified_chunks",
+        primary_key="id",
+    )
 
-vs_manager.sync_index(f"{CATALOG}.{SCHEMA}.eurovision_unified_index")
+    vs_manager.sync_index(f"{CATALOG}.{SCHEMA}.eurovision_unified_index")
+
+else:
+    logger.info("No source data updated, skipping index rebuild and sync")
 
 # COMMAND ----------
 # Step 5: Testing vector search - all sources
