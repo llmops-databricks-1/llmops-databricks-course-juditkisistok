@@ -2,6 +2,7 @@
 # COMMAND ----------
 import json
 
+import pyspark.sql.functions as F
 from pyspark.sql import SparkSession
 
 from eurovision_voting_bloc_party.config import get_env, load_config
@@ -57,5 +58,39 @@ def predict_winner() -> str:
 
 
 predict_winner()
+
+
+# COMMAND ----------
+def roast_country(country_name: str) -> str:
+    """
+    Fetch Eurovision stats for a country to fuel a loving but devastating roast.
+    Args:
+        country_name: Name of the country to roast
+    Returns:
+        JSON string with the country's Eurovision history
+    """
+
+    kaggle_data = spark.table(f"{CATALOG}.{SCHEMA}.eurovision_kaggle_chunks")
+    country_id = country_name.strip().lower().replace(" ", "_")
+
+    rows = kaggle_data.filter(F.col("chunk_id") == country_id).select("text").collect()
+
+    if not rows:
+        return json.dumps(
+            {
+                "error": f"""No data found for country: {country_name}.
+                                Maybe they never qualified?"""
+            }
+        )
+
+    return json.dumps(
+        {
+            "country": country_name,
+            "stats": rows[0].text,
+        }
+    )
+
+
+roast_country("Sweden")
 
 # COMMAND ----------
