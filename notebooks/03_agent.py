@@ -6,6 +6,7 @@ import pyspark.sql.functions as F
 from pyspark.sql import SparkSession
 
 from eurovision_voting_bloc_party.config import get_env, load_config
+from eurovision_voting_bloc_party.mcp import ToolInfo
 
 spark = SparkSession.builder.getOrCreate()
 
@@ -92,5 +93,54 @@ def roast_country(country_name: str) -> str:
 
 
 roast_country("Sweden")
+
+# COMMAND ----------
+predict_winner_spec = {
+    "type": "function",
+    "function": {
+        "name": "predict_winner",
+        "description": "Fetch historical Eurovision country stats to predict this year's "
+        "winner. Use this when someone asks who will win, who should win, or "
+        "wants a prediction.",
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    },
+}
+
+roast_country_spec = {
+    "type": "function",
+    "function": {
+        "name": "roast_country",
+        "description": "Fetch a country's Eurovision history to deliver a loving but "
+        "devastating roast. Use this when someone mentions they're from a country, "
+        "asks about a specific country, or explicitly asks for a roast.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "country": {
+                    "type": "string",
+                    "description": "The country to roast, e.g. 'United Kingdom', "
+                    "'Norway', 'France'",
+                }
+            },
+            "required": ["country"],
+        },
+    },
+}
+
+predict_winner_tool = ToolInfo(
+    name="predict_winner",
+    spec=predict_winner_spec,
+    exec_fn=predict_winner,
+)
+
+roast_country_tool = ToolInfo(
+    name="roast_country",
+    spec=roast_country_spec,
+    exec_fn=roast_country,
+)
+
+# COMMAND ----------
+
+# COMMAND ----------
 
 # COMMAND ----------
