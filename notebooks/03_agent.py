@@ -1,12 +1,16 @@
 # Databricks notebook source
 # COMMAND ----------
+import asyncio
 import json
 
+import nest_asyncio
 import pyspark.sql.functions as F
+from databricks.sdk import WorkspaceClient
+from loguru import logger
 from pyspark.sql import SparkSession
 
 from eurovision_voting_bloc_party.config import get_env, load_config
-from eurovision_voting_bloc_party.mcp import ToolInfo
+from eurovision_voting_bloc_party.mcp import ToolInfo, create_mcp_tools
 
 spark = SparkSession.builder.getOrCreate()
 
@@ -141,6 +145,17 @@ roast_country_tool = ToolInfo(
 
 # COMMAND ----------
 
+nest_asyncio.apply()
+
+w = WorkspaceClient()
+vector_search_mcp_url = f"{w.config.host}/api/2.0/mcp/vector-search/{CATALOG}/{SCHEMA}"
+
+mcp_tools = asyncio.run(create_mcp_tools(w, [vector_search_mcp_url]))
+logger.info(f"Loaded {len(mcp_tools)} MCP tools")
+for tool in mcp_tools:
+    logger.info(f"Tool: {tool.name}, Spec: {tool.spec}")
+
 # COMMAND ----------
+
 
 # COMMAND ----------
