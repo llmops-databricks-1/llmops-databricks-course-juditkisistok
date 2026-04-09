@@ -16,7 +16,7 @@ resources:
         - task_key: data_preprocessing_task
           environment_key: default
           notebook_task:
-            notebook_path: ../notebooks/01_preprocess.py
+            notebook_path: ../notebooks/02_context_engineering.py
             base_parameters:
               env: ${bundle.target}
               git_sha: "${var.git_sha}"

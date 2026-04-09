@@ -17,6 +17,8 @@ class ProjectConfig(BaseModel):
         default="You are a helpful AI assistant that helps users learn about Eurovision.",
         description="System prompt for the agent",
     )
+    vector_search_endpoint: str = Field(..., description="Vector search endpoint name")
+    embedding_endpoint: str = Field(..., description="Embedding model endpoint name")
 
     model_config = {"populate_by_name": True}
 

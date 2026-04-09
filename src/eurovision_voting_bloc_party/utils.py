@@ -154,3 +154,30 @@ def fetch_arxiv_data(query: str = "eurovision", max_results: int = 50) -> list[d
         results.append(paper)
     logger.info(f"Fetched {len(results)} papers from arXiv for query '{query}'")
     return results
+
+
+def create_sync_metadata_table(spark: SparkSession, catalog: str, schema: str) -> None:
+    """Create a Delta table to track vector search index synchronization metadata.
+
+    Args:
+        spark: Active SparkSession.
+        catalog: Unity Catalog name.
+        schema: Schema name.
+    """
+
+    spark.sql(f"""
+        CREATE TABLE IF NOT EXISTS {catalog}.{schema}.sync_metadata (
+            source_table STRING NOT NULL,
+    last_synced TIMESTAMP
+        )
+    """)
+
+    spark.sql(f"""
+          INSERT INTO {catalog}.{schema}.sync_metadata
+          SELECT source_table, NULL AS last_synced
+          FROM (VALUES ('wikipedia'), ('kaggle')) AS t(source_table)
+          WHERE NOT EXISTS (
+              SELECT 1 FROM {catalog}.{schema}.sync_metadata
+          )
+          """)
+    logger.info(f"Created sync metadata table: {catalog}.{schema}.sync_metadata")

@@ -6,3 +6,5 @@ dev:
   schema: eurovision
   volume: eurovision_data
   llm_endpoint: databricks-llama-4-maverick
+  vector_search_endpoint: eurovision_vs_endpoint
+  embedding_endpoint: databricks-gte-large-en
