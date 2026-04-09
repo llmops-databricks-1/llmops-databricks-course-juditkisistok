@@ -7,6 +7,7 @@ import nest_asyncio
 import pyspark.sql.functions as F
 from databricks.sdk import WorkspaceClient
 from loguru import logger
+from openai import OpenAI
 from pyspark.sql import SparkSession
 
 from eurovision_voting_bloc_party.config import get_env, load_config
@@ -120,13 +121,13 @@ roast_country_spec = {
         "parameters": {
             "type": "object",
             "properties": {
-                "country": {
+                "country_name": {
                     "type": "string",
                     "description": "The country to roast, e.g. 'United Kingdom', "
                     "'Norway', 'France'",
                 }
             },
-            "required": ["country"],
+            "required": ["country_name"],
         },
     },
 }
@@ -157,5 +158,97 @@ for tool in mcp_tools:
 
 # COMMAND ----------
 
+
+class EurovisionAgent:
+    def __init__(self, system_prompt: str, custom_tools: list[ToolInfo], mcp_tools: list):
+        self.system_prompt = system_prompt
+        self.tools = {tool.name: tool for tool in custom_tools + mcp_tools}
+        self.client = OpenAI(
+            api_key=w.tokens.create(lifetime_seconds=1200).token_value,
+            base_url=f"{w.config.host}/serving-endpoints",
+        )
+
+    def _get_tool_specs(self) -> list[dict]:
+        return [tool.spec for tool in self.tools.values()]
+
+    def _execute_tool(self, tool_name: str, args: dict) -> str:
+        if tool_name not in self.tools:
+            return f"Unknown tool: {tool_name}"
+        try:
+            return str(self.tools[tool_name].exec_fn(**args))
+        except Exception as e:
+            logger.error(f"Tool error: {e}")
+
+        tool = self.tools[tool_name]
+        return tool.exec_fn(**args)
+
+    def ask(self, question: str, max_iterations: int = 10) -> str:
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": question},
+        ]
+
+        for _ in range(max_iterations):
+            response = self.client.chat.completions.create(
+                model=cfg.llm_endpoint,
+                messages=messages,
+                tools=self._get_tool_specs(),
+            )
+
+            message = response.choices[0].message
+
+            if message.tool_calls:
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": message.content,
+                        "tool_calls": [
+                            {
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments,
+                                },
+                            }
+                            for tc in message.tool_calls
+                        ],
+                    }
+                )
+                for tc in message.tool_calls:
+                    args = json.loads(tc.function.arguments)
+                    logger.info(f"Executing tool: {tc.function.name} with args: {args}")
+                    tool_result = self._execute_tool(tc.function.name, args)
+                    messages.append(
+                        {"role": "tool", "tool_call_id": tc.id, "content": tool_result}
+                    )
+            else:
+                return message.content
+        return "Max iterations reached without a final answer."
+
+
+# COMMAND ----------
+graham_norton = EurovisionAgent(
+    system_prompt=system_prompt,
+    custom_tools=[predict_winner_tool, roast_country_tool],
+    mcp_tools=mcp_tools,
+)
+
+# COMMAND ----------
+# general question
+response = graham_norton.ask("Which countries always vote for each other?")
+logger.info(response)
+
+# COMMAND ----------
+# nerdy fact
+response = graham_norton.ask("Give me a nerdy Eurovision fact from academic research")
+logger.info(response)
+
+# COMMAND ----------
+response = graham_norton.ask("Who is going to win Eurovision this year?")
+logger.info(response)
+# COMMAND ----------
+response = graham_norton.ask("I'm from the United Kingdom, big Eurovision fan!")
+logger.info(response)
 
 # COMMAND ----------
