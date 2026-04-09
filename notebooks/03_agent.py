@@ -45,6 +45,7 @@ graham_norton = EurovisionAgent(
     custom_tools=[predict_winner_tool, roast_country_tool],
     mcp_tools=mcp_tools,
     w=w,
+    cfg=cfg,
 )
 
 # COMMAND ----------
