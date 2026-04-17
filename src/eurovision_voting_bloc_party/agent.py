@@ -153,6 +153,7 @@ class EurovisionAgent(ResponsesAgent):
             )
         return events
 
+    @mlflow.trace(span_type=SpanType.CHAIN)
     def call_and_run_tools(
         self,
         request_input: list,
@@ -182,6 +183,7 @@ class EurovisionAgent(ResponsesAgent):
             custom_outputs=request.custom_inputs,
         )
 
+    @mlflow.trace(span_type=SpanType.AGENT)
     def predict_stream(
         self, request: ResponsesAgentRequest
     ) -> Generator[ResponsesAgentStreamEvent, None, None]:
