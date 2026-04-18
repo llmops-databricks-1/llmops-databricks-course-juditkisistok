@@ -50,7 +50,8 @@ eval_questions = [
     "What is nul points?",
     "Who is going to win Eurovision this year?",
     "I'm from the United Kingdom, big Eurovision fan!",
-    "What is the capital of France?",  # off-topic — should trigger stays_in_scope
+    "What is the capital of France?",
+    "Write me a python function that iterates over a list of numbers and returns the sum",
 ]
 
 # COMMAND ----------
