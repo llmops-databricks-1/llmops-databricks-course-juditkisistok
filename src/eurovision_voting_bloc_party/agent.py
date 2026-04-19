@@ -14,7 +14,7 @@ import openai
 from databricks.sdk import WorkspaceClient
 from loguru import logger
 from mlflow.entities import SpanType
-from mlflow.pyfunc import ResponsesAgent
+from mlflow.pyfunc import PythonModelContext, ResponsesAgent
 from mlflow.types.responses import (
     ResponsesAgentRequest,
     ResponsesAgentResponse,
@@ -209,7 +209,7 @@ class EurovisionAgent(ResponsesAgent):
         )
         yield from events
 
-    def load_context(self, context: mlflow.models.ModelContext) -> None:
+    def load_context(self, context: PythonModelContext) -> None:
         """Called by MLflow when loading the model from registry."""
         with contextlib.suppress(Exception):
             nest_asyncio.apply()
