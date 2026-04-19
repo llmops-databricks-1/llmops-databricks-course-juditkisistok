@@ -235,3 +235,6 @@ class EurovisionAgent(ResponsesAgent):
             )
             tools = asyncio.run(create_mcp_tools(w, [mcp_url]))
             self.tools = {tool.name: tool for tool in tools}
+
+
+mlflow.models.set_model(EurovisionAgent())

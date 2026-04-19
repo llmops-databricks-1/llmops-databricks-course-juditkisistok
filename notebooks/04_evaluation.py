@@ -88,9 +88,16 @@ ts = datetime.now().strftime("%Y-%m-%d")
 with mlflow.start_run(run_name=f"eurovision-agent-{ts}"):
     model_info = mlflow.pyfunc.log_model(
         name="agent",
-        python_model=graham_norton,
+        python_model="../src/eurovision_voting_bloc_party/agent.py",
         resources=resources,
-        input_example=test_request,
+        model_config={
+            "catalog": cfg.catalog,
+            "schema": cfg.schema,
+            "volume": cfg.volume,
+            "llm_endpoint": cfg.llm_endpoint,
+            "vector_search_endpoint": cfg.vector_search_endpoint,
+            "embedding_endpoint": cfg.embedding_endpoint,
+        },
     )
 
 # COMMAND ----------
