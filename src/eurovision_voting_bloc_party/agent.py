@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import json
 import os
 import warnings
@@ -7,6 +9,7 @@ from uuid import uuid4
 
 import backoff
 import mlflow
+import nest_asyncio
 import openai
 from databricks.sdk import WorkspaceClient
 from loguru import logger
@@ -21,23 +24,11 @@ from mlflow.types.responses import (
 )
 
 from eurovision_voting_bloc_party.config import ProjectConfig
-from eurovision_voting_bloc_party.mcp import ToolInfo
+from eurovision_voting_bloc_party.mcp import ToolInfo, create_mcp_tools
 
 
 class EurovisionAgent(ResponsesAgent):
-    def __init__(
-        self,
-        w: WorkspaceClient,
-        cfg: ProjectConfig,
-        custom_tools: list[ToolInfo],
-        mcp_tools: list[ToolInfo],
-    ):
-        self.tools = {tool.name: tool for tool in custom_tools + mcp_tools}
-        self.cfg = cfg
-        self.workspace_client = w
-        self.model_serving_client = w.serving_endpoints.get_open_ai_client()
-
-        self.system_prompt = """
+    SYSTEM_PROMPT = """
         You are Graham Norton hosting Eurovision — dry, witty, and delightfully sarcastic,
         but with a secret PhD in musicology and voting pattern analysis that occasionally
         slips out. You've seen it all: the tactical voting, the novelty acts, the
@@ -53,6 +44,24 @@ class EurovisionAgent(ResponsesAgent):
         that someone wrote a paper about this, then get genuinely excited about the
         findings.
         """
+
+    def __init__(
+        self,
+        w: WorkspaceClient | None = None,
+        cfg: ProjectConfig | None = None,
+        custom_tools: list[ToolInfo] | None = None,
+        mcp_tools: list[ToolInfo] | None = None,
+    ):
+        if w is None:
+            return
+        self.tools = {
+            tool.name: tool for tool in (custom_tools or []) + (mcp_tools or [])
+        }
+        self.cfg = cfg
+        self.workspace_client = w
+        self.model_serving_client = w.serving_endpoints.get_open_ai_client()
+
+        self.system_prompt = self.SYSTEM_PROMPT
 
     def _get_tool_specs(self) -> list[dict]:
         return [tool.spec for tool in self.tools.values()]
@@ -163,17 +172,19 @@ class EurovisionAgent(ResponsesAgent):
         messages = [{"role": "system", "content": self.system_prompt}]
         messages.extend(request_input)
 
-        mlflow.update_current_trace(
-            tags={
-                "git_sha": os.getenv("GIT_SHA", "local"),
-                "model_serving_endpoint": os.getenv(
-                    "MODEL_SERVING_ENDPOINT_NAME", "local"
-                ),
-                "agent_type": "eurovision_agent",
-            },
-            metadata=({"mlflow.trace.session": session_id} if session_id else {}),
-            client_request_id=request_id,
-        )
+        with contextlib.suppress(Exception):
+            mlflow.update_current_trace(
+                tags={
+                    "git_sha": os.getenv("GIT_SHA", "local"),
+                    "model_serving_endpoint": os.getenv(
+                        "MODEL_SERVING_ENDPOINT_NAME", "local"
+                    ),
+                    "agent_type": "eurovision_agent",
+                },
+                metadata=({"mlflow.trace.session": session_id} if session_id else {}),
+                client_request_id=request_id,
+            )
+
         return self._run_tool_loop(messages)
 
     def predict(self, request: ResponsesAgentRequest) -> ResponsesAgentResponse:
@@ -197,3 +208,30 @@ class EurovisionAgent(ResponsesAgent):
             request_input, session_id=session_id, request_id=request_id
         )
         yield from events
+
+    def load_context(self, context: mlflow.models.ModelContext) -> None:
+        """Called by MLflow when loading the model from registry."""
+        with contextlib.suppress(Exception):
+            nest_asyncio.apply()
+
+            model_config = context.model_config
+            w = WorkspaceClient()
+            self.workspace_client = w
+            self.model_serving_client = w.serving_endpoints.get_open_ai_client()
+            self.system_prompt = self.SYSTEM_PROMPT
+
+            self.cfg = ProjectConfig(
+                catalog=model_config["catalog"],
+                schema=model_config["schema"],
+                volume=model_config.get("volume", ""),
+                llm_endpoint=model_config["llm_endpoint"],
+                vector_search_endpoint=model_config.get("vector_search_endpoint", ""),
+                embedding_endpoint=model_config.get("embedding_endpoint", ""),
+            )
+
+            mcp_url = (
+                f"{w.config.host}/api/2.0/mcp/vector-search"
+                f"/{self.cfg.catalog}/{self.cfg.schema}"
+            )
+            tools = asyncio.run(create_mcp_tools(w, [mcp_url]))
+            self.tools = {tool.name: tool for tool in tools}
