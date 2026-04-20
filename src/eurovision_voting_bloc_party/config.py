@@ -19,7 +19,7 @@ class ProjectConfig(BaseModel):
     )
     vector_search_endpoint: str = Field(..., description="Vector search endpoint name")
     embedding_endpoint: str = Field(..., description="Embedding model endpoint name")
-    experiment_name: str = Field(..., description="MLflow experiment name")
+    experiment_name: str | None = None
 
     model_config = {"populate_by_name": True}
 
