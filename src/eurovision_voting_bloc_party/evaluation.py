@@ -3,6 +3,7 @@ from mlflow.genai.scorers import Guidelines
 from mlflow.types.responses import ResponsesAgentRequest
 
 from eurovision_voting_bloc_party.agent import EurovisionAgent
+from eurovision_voting_bloc_party.config import ProjectConfig
 
 # guidelines
 witty_tone_guideline = Guidelines(
@@ -82,8 +83,13 @@ def mentions_countries(outputs: list) -> bool:
 
 
 def evaluate_agent(
-    agent: EurovisionAgent, eval_questions: list[str]
+    cfg: ProjectConfig, eval_questions: list[str]
 ) -> mlflow.models.EvaluationResult:
+
+    agent = EurovisionAgent(
+        cfg=cfg,
+    )
+
     eval_data = [{"inputs": {"question": q}} for q in eval_questions]
 
     def predict_fn(question: str) -> str:
