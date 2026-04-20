@@ -22,9 +22,14 @@ from mlflow.types.responses import (
     output_to_responses_items_stream,
     to_chat_completions_input,
 )
+from pyspark.sql import SparkSession
 
+from eurovision_voting_bloc_party.agent_tools import (
+    create_predict_winner_tool,
+    create_roast_country_tool,
+)
 from eurovision_voting_bloc_party.config import ProjectConfig
-from eurovision_voting_bloc_party.mcp import ToolInfo, create_mcp_tools
+from eurovision_voting_bloc_party.mcp import create_mcp_tools
 
 
 class EurovisionAgent(ResponsesAgent):
@@ -45,23 +50,30 @@ class EurovisionAgent(ResponsesAgent):
         findings.
         """
 
-    def __init__(
-        self,
-        w: WorkspaceClient | None = None,
-        cfg: ProjectConfig | None = None,
-        custom_tools: list[ToolInfo] | None = None,
-        mcp_tools: list[ToolInfo] | None = None,
-    ):
-        if w is None:
+    def __init__(self, cfg: ProjectConfig | None = None):
+        if cfg is None:
             return
-        self.tools = {
-            tool.name: tool for tool in (custom_tools or []) + (mcp_tools or [])
-        }
+
+        nest_asyncio.apply()
         self.cfg = cfg
+        self.system_prompt = self.SYSTEM_PROMPT
+
+        w = WorkspaceClient()
         self.workspace_client = w
         self.model_serving_client = w.serving_endpoints.get_open_ai_client()
 
-        self.system_prompt = self.SYSTEM_PROMPT
+        mcp_url = f"{w.config.host}/api/2.0/mcp/vector-search/{cfg.catalog}/{cfg.schema}"
+        mcp_tools = asyncio.run(create_mcp_tools(w, [mcp_url]))
+
+        spark = SparkSession.builder.getOrCreate()
+        custom_tools = [
+            create_predict_winner_tool(spark, cfg.catalog, cfg.schema),
+            create_roast_country_tool(spark, cfg.catalog, cfg.schema),
+        ]
+
+        self.tools = {
+            tool.name: tool for tool in (custom_tools or []) + (mcp_tools or [])
+        }
 
     def _get_tool_specs(self) -> list[dict]:
         return [tool.spec for tool in self.tools.values()]
