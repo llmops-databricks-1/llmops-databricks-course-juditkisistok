@@ -4,9 +4,9 @@ import arxiv
 import kagglehub
 import polars as pl
 import wikipediaapi
+from databricks.sdk.runtime import dbutils
 from kagglehub import KaggleDatasetAdapter
 from loguru import logger
-from pyspark import dbutils
 from pyspark.sql import DataFrame as SparkDataFrame
 from pyspark.sql import SparkSession
 
