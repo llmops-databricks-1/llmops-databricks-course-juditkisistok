@@ -4,6 +4,7 @@ import json
 import os
 import warnings
 from collections.abc import Generator
+from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
@@ -13,7 +14,13 @@ import nest_asyncio
 import openai
 from databricks.sdk import WorkspaceClient
 from loguru import logger
+from mlflow import MlflowClient
 from mlflow.entities import SpanType
+from mlflow.models.resources import (
+    DatabricksServingEndpoint,
+    DatabricksTable,
+    DatabricksVectorSearchIndex,
+)
 from mlflow.pyfunc import PythonModelContext, ResponsesAgent
 from mlflow.types.responses import (
     ResponsesAgentRequest,
@@ -59,21 +66,20 @@ class EurovisionAgent(ResponsesAgent):
         self.system_prompt = self.SYSTEM_PROMPT
 
         w = WorkspaceClient()
+        spark = SparkSession.builder.getOrCreate()
+
         self.workspace_client = w
         self.model_serving_client = w.serving_endpoints.get_open_ai_client()
 
         mcp_url = f"{w.config.host}/api/2.0/mcp/vector-search/{cfg.catalog}/{cfg.schema}"
         mcp_tools = asyncio.run(create_mcp_tools(w, [mcp_url]))
 
-        spark = SparkSession.builder.getOrCreate()
         custom_tools = [
             create_predict_winner_tool(spark, cfg.catalog, cfg.schema),
             create_roast_country_tool(spark, cfg.catalog, cfg.schema),
         ]
 
-        self.tools = {
-            tool.name: tool for tool in (custom_tools or []) + (mcp_tools or [])
-        }
+        self.tools = {tool.name: tool for tool in mcp_tools + custom_tools}
 
     def _get_tool_specs(self) -> list[dict]:
         return [tool.spec for tool in self.tools.values()]
@@ -228,6 +234,7 @@ class EurovisionAgent(ResponsesAgent):
 
             model_config = context.model_config
             w = WorkspaceClient()
+            spark = SparkSession.builder.getOrCreate()
             self.workspace_client = w
             self.model_serving_client = w.serving_endpoints.get_open_ai_client()
             self.system_prompt = self.SYSTEM_PROMPT
@@ -245,8 +252,94 @@ class EurovisionAgent(ResponsesAgent):
                 f"{w.config.host}/api/2.0/mcp/vector-search"
                 f"/{self.cfg.catalog}/{self.cfg.schema}"
             )
-            tools = asyncio.run(create_mcp_tools(w, [mcp_url]))
-            self.tools = {tool.name: tool for tool in tools}
+
+            custom_tools = [
+                create_predict_winner_tool(
+                    spark,
+                    self.cfg.catalog,
+                    self.cfg.schema,
+                ),
+                create_roast_country_tool(
+                    spark,
+                    self.cfg.catalog,
+                    self.cfg.schema,
+                ),
+            ]
+            mcp_tools = asyncio.run(create_mcp_tools(w, [mcp_url]))
+            self.tools = {tool.name: tool for tool in mcp_tools + custom_tools}
+
+
+def log_register_agent(
+    cfg: ProjectConfig,
+    git_sha: str,
+    run_id: str,
+    agent_code_path: str,
+    model_name: str,
+    evaluation_metrics: dict | None = None,
+) -> mlflow.entities.model_registry.RegisteredModel:
+    resources = [
+        DatabricksServingEndpoint(endpoint_name=cfg.llm_endpoint),
+        DatabricksServingEndpoint(endpoint_name=cfg.embedding_endpoint),
+        DatabricksVectorSearchIndex(
+            index_name=f"{cfg.catalog}.{cfg.schema}.eurovision_unified_index"
+        ),
+        DatabricksTable(
+            table_name=f"{cfg.catalog}.{cfg.schema}.eurovision_unified_chunks"
+        ),
+        DatabricksTable(
+            table_name=f"{cfg.catalog}.{cfg.schema}.eurovision_kaggle_chunks"
+        ),
+    ]
+
+    model_config = {
+        "catalog": cfg.catalog,
+        "schema": cfg.schema,
+        "volume": cfg.volume,
+        "llm_endpoint": cfg.llm_endpoint,
+        "vector_search_endpoint": cfg.vector_search_endpoint,
+        "embedding_endpoint": cfg.embedding_endpoint,
+    }
+
+    test_request = {
+        "input": [
+            {"role": "user", "content": "Which countries always vote for each other?"}
+        ]
+    }
+
+    ts = datetime.now().strftime("%Y-%m-%d")
+
+    with mlflow.start_run(
+        run_name=f"eurovision-agent-{ts}",
+        tags={"git_sha": git_sha, "run_id": run_id},
+    ):
+        model_info = mlflow.pyfunc.log_model(
+            name="agent",
+            python_model=agent_code_path,
+            resources=resources,
+            input_example=test_request,
+            model_config=model_config,
+        )
+        if evaluation_metrics:
+            mlflow.log_metrics(evaluation_metrics)
+
+    registered_model = mlflow.register_model(
+        model_uri=model_info.model_uri,
+        name=model_name,
+        tags={"git_sha": git_sha, "run_id": run_id},
+    )
+
+    client = MlflowClient()
+    client.set_registered_model_alias(
+        name=model_name,
+        alias="latest-model",
+        version=registered_model.version,
+    )
+
+    logger.info(
+        f"Registered {model_name} version {registered_model.version}",
+        "with alias 'latest-model'",
+    )
+    return registered_model
 
 
 mlflow.models.set_model(EurovisionAgent())
