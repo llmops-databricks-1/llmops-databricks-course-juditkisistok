@@ -31,4 +31,4 @@ targets:
 
 sync:
   include:
-    - project_config.yml
+    - project_config.yaml
