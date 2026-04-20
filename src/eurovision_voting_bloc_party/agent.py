@@ -336,8 +336,8 @@ def log_register_agent(
     )
 
     logger.info(
-        f"Registered {model_name} version {registered_model.version}",
-        "with alias 'latest-model'",
+        f"Registered {model_name} version {registered_model.version}"
+        " with alias 'latest-model'"
     )
     return registered_model
 
