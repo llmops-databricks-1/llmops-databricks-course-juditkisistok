@@ -19,6 +19,7 @@ class ProjectConfig(BaseModel):
     )
     vector_search_endpoint: str = Field(..., description="Vector search endpoint name")
     embedding_endpoint: str = Field(..., description="Embedding model endpoint name")
+    experiment_name: str | None = None
 
     model_config = {"populate_by_name": True}
 
@@ -64,7 +65,7 @@ class ProjectConfig(BaseModel):
 
 
 def load_config(
-    config_path: str = "project_config.yml", env: str = "dev"
+    config_path: str = "project_config.yaml", env: str = "dev"
 ) -> ProjectConfig:
     """Load project configuration.
 

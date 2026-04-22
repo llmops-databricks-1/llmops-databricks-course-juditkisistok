@@ -4,6 +4,7 @@ import arxiv
 import kagglehub
 import polars as pl
 import wikipediaapi
+from databricks.sdk.runtime import dbutils
 from kagglehub import KaggleDatasetAdapter
 from loguru import logger
 from pyspark.sql import DataFrame as SparkDataFrame
@@ -181,3 +182,17 @@ def create_sync_metadata_table(spark: SparkSession, catalog: str, schema: str) -
           )
           """)
     logger.info(f"Created sync metadata table: {catalog}.{schema}.sync_metadata")
+
+
+def get_widget(name: str, default: str | None = None) -> str | None:
+    """Get a Databricks widget value with a fallback default.
+
+    :param name: Widget name.
+    :param default: Default value if widget is not set.
+    :return: Widget value or default.
+    """
+
+    try:
+        return dbutils.widgets.get(name)
+    except KeyError:
+        return default

@@ -8,3 +8,4 @@ dev:
   llm_endpoint: databricks-llama-4-maverick
   vector_search_endpoint: eurovision_vs_endpoint
   embedding_endpoint: databricks-gte-large-en
+  experiment_name: /Shared/eurovision-agent-dev
